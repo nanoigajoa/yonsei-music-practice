@@ -21,7 +21,7 @@ from models import Period, Room, StatusResponse
 # ── 설정 ──────────────────────────────────────────────
 KIOSK_URL = "http://165.132.176.173/booking/main_list.php"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; practice-room-monitor/1.0)"}
-ROOMS_FILE = Path(__file__).parent.parent / "kiosk" / "rooms.json"
+ROOMS_FILE = Path(__file__).parent / "rooms.json"
 INTER_CORNER_DELAY = 1.0   # 코너 간 대기(초)
 REQUEST_TIMEOUT = 5.0
 SLOT_START_HOUR = 7
