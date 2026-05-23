@@ -1,0 +1,3373 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<style type="text/css">
+ html, body {
+    height: 100%; overflow:hidden;
+}
+</style>
+<html lang="ko" xmlns="http://www.w3.org/1999/xhtml">
+ <head>
+  <title>
+   연세대학교-디지털자료실 예약시스템
+  </title>
+  <!-- Meta Tags -->
+  <meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+  <meta content="" name="keywords"/>
+  <meta content="" name="description"/>
+  <!-- css, javascript -->
+  <link href="/css/css.css" rel="stylesheet" type="text/css"/>
+  <link href="/css/kor.Basis.css" rel="stylesheet" type="text/css"/>
+  <link href="/css/style.css" rel="stylesheet" type="text/css"/>
+  <link href="/js/jqueryui/css/jquery.ui.all.css" rel="stylesheet" type="text/css">
+   <script src="/js/jquery-1.10.1.min.js" type="text/javascript">
+   </script>
+   <script src="/js/jqueryui/jquery-ui-1.8.9.custom.min.js" type="text/javascript">
+   </script>
+   <script src="/js/scripts.js" type="text/javascript">
+   </script>
+   <script src="/js/ajax.js" type="text/javascript">
+   </script>
+   <div id="popViewBack2">
+   </div>
+   <div id="popView2">
+    <div id="header-wrapper2">
+     <div id="header">
+      <div id="logo">
+       <h1>
+        <a href="#">
+         <span id="popup_title2">
+         </span>
+        </a>
+       </h1>
+      </div>
+     </div>
+    </div>
+    <span id="popViewClose2">
+     <img alt="닫기" height="16" src="/images/kor/close_btn.gif" width="16"/>
+    </span>
+    <iframe allowfullscreen="" frameborder="0" height="100%" id="popup2" scrolling="auto" src="" style="position:relative;top:0px;left:0px;" title="팝업" width="100%">
+    </iframe>
+   </div>
+   <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+   <html lang="ko" xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+     <title>
+      멀티미디어실 좌석예약시스템 본문
+     </title>
+     <!-- Meta Tags -->
+     <meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+     <meta content="" name="keywords"/>
+     <meta content="" name="description"/>
+     <link href="/css/kor.Basis.css" rel="stylesheet" type="text/css"/>
+     <script type="text/javascript">
+      <!--				
+	
+function touch(){
+	if (parent.document.f1.rfid != undefined){ 
+				alert('회원증을 스캐너에 인식하세요!!');
+				parent.document.f1.rfid.focus();
+	}
+}
+function touch2(){
+	if (parent.document.f1.rfid != undefined){ 
+				parent.document.f1.rfid.focus();
+	}
+}
+function reserve(corner_no, pc_id, o_timestamp, c_timestamp, now_cell_time, cell_min)
+{
+		//parent.login();
+	if (parent.document.f1.rfid != undefined){    
+			parent.document.f1.rfid.focus();
+		}else{
+			parent.login();
+		}
+		
+	return false;
+}
+
+
+var oldPC = null;
+
+function setTrColorChange(idx) 
+{
+	if (oldPC) {
+		oldPC.className = "Body-List";
+	}
+	
+	var thisPC = document.getElementById("seat_" + idx);
+	
+	thisPC.className = "Body-List on";
+	setCookie("MAIN_LIST_PC", idx);
+
+	oldPC = thisPC;
+}
+
+//-->
+     </script>
+    </head>
+    <body id="webbooking-iv">
+     <div id="Body-Wrapper">
+      <table border="0" cellpadding="1" cellspacing="1" width="1200">
+       <tbody>
+        <tr>
+         <td align="center">
+          ﻿
+         </td>
+        </tr>
+        <tr>
+         <td>
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_0" onclick="setTrColorChange('0');" onkeypress="setTrColorChange('0');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 107호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=3&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_0">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_0_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_57" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_58" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_59" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_60" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_61" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_62" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_63" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_64" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_65" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_0_66" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_0_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','3','1779487200','1779541200','16','23');" onkeypress="return reserve('1','3','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_0_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_1" onclick="setTrColorChange('1');" onkeypress="setTrColorChange('1');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 108호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=4&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_1">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_1_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_1_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li>
+                <a href="#" onclick="return reserve('1','4','1779487200','1779541200','16','23');" onkeypress="return reserve('1','4','1779487200','1779541200','16','23');">
+                 <img alt="[오후] 4:30 (새 창에서 열림)" class="time_cell3" id="time_cell_1_57" src="/images/kor/time_gray.gif"/>
+                </a>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_58" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_59" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_60" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_61" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_62" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_63" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_64" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_65" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_66" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_1_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','4','1779487200','1779541200','16','23');" onkeypress="return reserve('1','4','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_1_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_2" onclick="setTrColorChange('2');" onkeypress="setTrColorChange('2');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 109호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=5&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_2">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_2_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_57" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_58" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_59" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_60" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_61" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_62" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_63" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_64" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_65" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_2_66" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_2_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','5','1779487200','1779541200','16','23');" onkeypress="return reserve('1','5','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_2_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_3" onclick="setTrColorChange('3');" onkeypress="setTrColorChange('3');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 110호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=6&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_3">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_3_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_3_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_3_57" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_3_58" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_3_59" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_60" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_61" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_62" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_63" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_64" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_65" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_66" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_3_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','6','1779487200','1779541200','16','23');" onkeypress="return reserve('1','6','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_3_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_4" onclick="setTrColorChange('4');" onkeypress="setTrColorChange('4');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 111호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=7&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_4">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_4_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_56" src="/images/kor/time_red.gif"/>
+               </li>
+               <li>
+                <a href="#" onclick="return reserve('1','7','1779487200','1779541200','16','23');" onkeypress="return reserve('1','7','1779487200','1779541200','16','23');">
+                 <img alt="[오후] 4:30 (새 창에서 열림)" class="time_cell3" id="time_cell_4_57" src="/images/kor/time_gray.gif"/>
+                </a>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_58" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_59" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_60" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_61" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_62" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_63" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_64" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_65" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_66" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_4_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','7','1779487200','1779541200','16','23');" onkeypress="return reserve('1','7','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_4_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_5" onclick="setTrColorChange('5');" onkeypress="setTrColorChange('5');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 112호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=8&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_5">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_5_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_5_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_5_57" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_5_58" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_5_59" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_5_60" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_61" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_62" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_63" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_64" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_65" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_66" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_5_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','8','1779487200','1779541200','16','23');" onkeypress="return reserve('1','8','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_5_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_6" onclick="setTrColorChange('6');" onkeypress="setTrColorChange('6');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 113호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=9&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_6">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_6_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_56" src="/images/kor/time_red.gif"/>
+               </li>
+               <li>
+                <a href="#" onclick="return reserve('1','9','1779487200','1779541200','16','23');" onkeypress="return reserve('1','9','1779487200','1779541200','16','23');">
+                 <img alt="[오후] 4:30 (새 창에서 열림)" class="time_cell3" id="time_cell_6_57" src="/images/kor/time_gray.gif"/>
+                </a>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_58" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_59" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_60" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_61" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_62" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_63" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_64" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_65" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_66" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_6_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','9','1779487200','1779541200','16','23');" onkeypress="return reserve('1','9','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_6_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+          <!-- Task Area Start -->
+          <div class="Body-List" id="seat_7" onclick="setTrColorChange('7');" onkeypress="setTrColorChange('7');">
+           <div class="title">
+            <table border="0">
+             <tr>
+              <td nowrap="">
+               <img align="absmiddle" alt="연습실" src="/images/corner/00010.gif"/>
+              </td>
+              <td nowrap="">
+               연습실 114호
+              </td>
+              <!--td bgcolor="red"><a href='touch/reserve.php?corner_no=1&pc_id=10&open_timestamp=1779487200&now_cell_time=16&cell_min=05&close_timestamp=50' >예약신청</a></td-->
+             </tr>
+            </table>
+           </div>
+           <div class="contents" id="hour_7">
+            <ul>
+             <li>
+              <div class="Am">
+               7시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_0" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_1" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_2" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_3" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_4" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_5" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               8시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_6" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_7" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_8" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_9" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_10" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_11" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               9시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_12" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_13" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_14" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_15" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_16" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_17" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               10시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_18" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_19" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_20" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_21" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_22" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_23" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Am">
+               11시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_24" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_25" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_26" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_27" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_28" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_29" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               12시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_30" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_31" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_32" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_33" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_34" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_35" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               1시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_36" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_37" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_38" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_39" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_40" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_41" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               2시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_42" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_43" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_44" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_45" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_46" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_47" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               3시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_48" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_49" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_50" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_51" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_52" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_53" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               4시
+              </div>
+              <ul>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_54" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="지난 시간은 예약이 불가합니다.">
+                <img alt="지난 시간" class="time_cell" id="time_cell_7_55" src="/images/kor/time_red.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_56" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_57" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_58" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_59" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <br/>
+             <br/>
+             <li>
+              <div class="Pm">
+               5시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_60" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_61" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_62" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_63" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_64" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_65" src="/images/kor/time_blue.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               6시
+              </div>
+              <ul>
+               <li title="예약된 좌석">
+                <img alt="예약된 좌석" class="time_cell" id="time_cell_7_66" src="/images/kor/time_blue.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_67" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_68" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_69" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_70" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_71" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               7시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_72" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_73" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_74" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_75" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_76" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_77" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               8시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_78" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_79" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_80" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_81" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_82" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_83" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+             <li>
+              <div class="Pm">
+               9시
+              </div>
+              <ul>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_84" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_85" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_86" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_87" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_88" src="/images/kor/time_red.gif"/>
+               </li>
+               <li bgcolor="#333333" onclick="alert(this.title)" onkeypress="alert(this.title)" title="예약불가 시간 입니다.">
+                <img alt="예약 불가" class="time_cell" id="time_cell_7_89" src="/images/kor/time_red.gif"/>
+               </li>
+              </ul>
+             </li>
+            </ul>
+           </div>
+           <!-- 터치모드 사용시 버튼 표시 및 예약가능시간계산(TouchReserve.class.php 추가) 2013.04.30 정영두 -->
+           <div class="reserve">
+            <a href="#" onclick="return reserve('1','10','1779487200','1779541200','16','23');" onkeypress="return reserve('1','10','1779487200','1779541200','16','23');">
+             <img alt="16:23 (새 창에서 열림)" class="time_cell" id="time_cell_7_89" src="/images/kor/btn_nonbook1.gif"/>
+            </a>
+           </div>
+           <!-- 터치모드 끝 -->
+          </div>
+          <!-- (Task Area End) -->
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
+    </body>
+   </html>
+  </link>
+ </head>
+</html>

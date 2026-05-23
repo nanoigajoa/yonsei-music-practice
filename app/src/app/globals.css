@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+
+  /* ── Royal Blue 팔레트 ── */
+  --color-rb-50:  #eff6ff;
+  --color-rb-100: #dbeafe;
+  --color-rb-200: #bfdbfe;
+  --color-rb-400: #60a5fa;
+  --color-rb-500: #3b82f6;
+  --color-rb-600: #2563eb;
+  --color-rb-700: #1d4ed8;
+  --color-rb-800: #1e40af;
+  --color-rb-900: #1e3a8a;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+body {
+  background: #f0f4ff;
+  color: #111827;
+  font-family: var(--font-sans), -apple-system, "Noto Sans KR", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+}

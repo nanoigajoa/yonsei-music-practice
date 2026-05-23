@@ -1,0 +1,165 @@
+<head><style type="text/css">
+    html, body {
+       height: 100%; overflow:hidden;
+   }
+   </style>
+   
+    
+     <title>
+      연세대학교-디지털자료실 예약시스템
+     </title>
+     <!-- Meta Tags -->
+     <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+     <meta content="" name="keywords">
+     <meta content="" name="description">
+     <!-- css, javascript -->
+     <link href="/css/css.css" rel="stylesheet" type="text/css">
+     <link href="/css/kor.Basis.css" rel="stylesheet" type="text/css">
+     <link href="/css/style.css" rel="stylesheet" type="text/css">
+     <link href="/js/jqueryui/css/jquery.ui.all.css" rel="stylesheet" type="text/css">
+      <script src="/js/jquery-1.10.1.min.js" type="text/javascript">
+      </script>
+      <script src="/js/jqueryui/jquery-ui-1.8.9.custom.min.js" type="text/javascript">
+      </script>
+      <script src="/js/scripts.js" type="text/javascript">
+      </script>
+      <script src="/js/ajax.js" type="text/javascript">
+      </script>
+      </head>
+      
+<body><div id="popViewBack2">
+</div>
+<div id="popView2">
+ <div id="header-wrapper2">
+  <div id="header">
+   <div id="logo">
+    <h1>
+     <a href="#">
+      <span id="popup_title2">
+      </span>
+     </a>
+    </h1>
+   </div>
+  </div>
+ </div>
+ <span id="popViewClose2">
+  <img alt="닫기" height="16" src="/images/kor/close_btn.gif" width="16">
+ </span>
+ <iframe allowfullscreen="" frameborder="0" height="100%" id="popup2" scrolling="auto" src="" style="position:relative;top:0px;left:0px;" title="팝업" width="100%">
+ </iframe>
+</div>
+<script type="text/javascript">
+ <!--	
+function reserve(corner_no, pc_id, o_timestamp, c_timestamp, now_cell_time, cell_min)
+{
+ var admin_mode = '';
+ parent.session_check('pop');
+ var URL = 'reserve.php?corner_no=' + corner_no +
+                                 '&pc_id=' + pc_id +
+                                 '&open_timestamp=' + o_timestamp +
+                                 '&now_cell_time=' + now_cell_time +
+                                 '&cell_min=' + cell_min +
+                                 '&admin_mode=' + admin_mode +								
+                                 '&close_timestamp=' + c_timestamp;
+ 
+ //parent.document.getElementById('popup').src = URL;
+ parent.jquery_popup(URL,'예약하기');
+ return false;
+}
+function reserve_m(corner_no, pc_id, pc_no, o_timestamp, c_timestamp, now_cell_time, cell_min, corner_name, pc_name)
+{	
+ var admin_mode = '';
+ var URL = '/m/reserve.php?corner_no=' + corner_no +
+                                 '&pc_id=' + pc_id +
+                                 '&open_timestamp=' + o_timestamp +
+                                 '&now_cell_time=' + now_cell_time +
+                                 '&cell_min=' + cell_min +
+                                 '&admin_mode=' + admin_mode +
+                                 '&corner_name=' + corner_name +
+                                 '&pc_no=' + pc_no +
+                                 '&pc_name=' + pc_name +
+                                 '&close_timestamp=' + c_timestamp;	
+ document.location.href=URL;
+ return false;
+}
+function login_m()
+{	
+ document.location.href="/m/login.php?view_type=seat_m";
+ return false;
+}
+var oldPC = null;
+
+function setTrColorChange(idx) 
+{
+ if (oldPC) {
+     oldPC.className = "Body-List";
+ }
+ 
+ var thisPC = document.getElementById("seat_" + idx);
+ 
+ thisPC.className = "Body-List on";
+ //setCookie("MAIN_LIST_PC", idx);
+
+ oldPC = thisPC;
+}
+var reload_bool = true;
+
+function jq_reload() {
+ var URL;
+ var view = "";
+ if (reload_bool == true){
+     $("img").one('load', function() {
+       // do stuff
+     }).each(function() {
+       if(this.complete) $(this).load();
+     });
+ 
+     if(view == 'seat'){	
+             URL = "/takeseat/select_seat.php?room_no=1";				
+     }else if(view == 'seat_m'){	
+             URL = "/takeseat/select_seat_m.php?room_no=1";		
+     }else{
+             URL = "/booking/main_list.php?corner_no=1&TimeCellSize=0&page=";				
+     }
+
+     $("#seat_view").load(URL+" #Body-Wrapper",null,function(response,status,xhr){
+     if (status == 'success'){		
+         window.setTimeout("jq_reload()", 10000);
+     }
+     
+     });
+ }
+ 
+}
+
+// 리프레쉬 일시 정지 효과
+function reloadStart()
+{
+ 
+ reload_bool = true;
+ jq_reload();
+}
+function reloadStop()
+{
+ reload_bool = false;
+}
+
+$(document).ready(function(){
+ 
+ $("img").one('load', function() {
+       // do stuff
+     }).each(function() {
+       if(this.complete) $(this).load();
+     });
+
+  reloadStart();
+});
+
+//-->
+</script>
+
+
+<div id="seat_view">
+</div>
+
+</body>
