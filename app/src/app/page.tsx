@@ -5,9 +5,11 @@ import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firest
 import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
+import { useUserProfile } from '@/hooks/useUserProfile'
 import { NotificationBanner } from '@/components/NotificationBanner'
 import { EarlyReturnList } from '@/components/EarlyReturnList'
 import { UrgentTossSheet } from '@/components/UrgentTossSheet'
+import { OnboardingModal } from '@/components/OnboardingModal'
 import { TransferRequest, COLLECTIONS } from '@/types/collections'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 
@@ -86,6 +88,7 @@ const FLOORS = [1, 2, 3, 4]
 
 export default function HomePage() {
   const { user } = useAnonymousAuth()
+  const { profile, isNew, suggestedNickname, rerollNickname, saveProfile } = useUserProfile(user)
   const { status, connState, byFloor, refresh, refreshing } = useRoomStatus()
 
   const [activeFloor, setActiveFloor]   = useState(1)
@@ -161,9 +164,17 @@ export default function HomePage() {
             </span>
           </div>
         </div>
-        <p className="text-rb-200 text-sm mt-0.5">
-          키오스크 실시간 연동{updatedAt && <span> · {updatedAt} 갱신</span>}
-        </p>
+        <div className="flex items-center justify-between mt-0.5">
+          <p className="text-rb-200 text-sm">
+            키오스크 실시간 연동{updatedAt && <span> · {updatedAt} 갱신</span>}
+          </p>
+          {/* 프로필 칩 */}
+          {profile && (
+            <span className="text-[11px] text-rb-200 font-medium">
+              {profile.nickname} · {profile.department}
+            </span>
+          )}
+        </div>
 
         {/* 요약 통계 */}
         {status && (
@@ -358,6 +369,15 @@ export default function HomePage() {
             setShowTossSheet(false)
             setTossSuccess({ roomId, floor })
           }}
+        />
+      )}
+
+      {/* ── 온보딩 (신규 사용자) ── */}
+      {isNew && suggestedNickname && (
+        <OnboardingModal
+          suggestedNickname={suggestedNickname}
+          onReroll={rerollNickname}
+          onSave={saveProfile}
         />
       )}
 
