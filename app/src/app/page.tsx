@@ -27,6 +27,17 @@ const CONN_COLOR: Record<string, string> = {
   error:      'text-red-300',
 }
 
+// ── 운영 시간 판별 (07:00–22:00) ──────────────────────────
+function isOperatingHours(now: Date = new Date()): boolean {
+  const min = now.getHours() * 60 + now.getMinutes()
+  return min >= 7 * 60 && min < 22 * 60
+}
+
+// ── corner → 동 ──────────────────────────────────────────
+function buildingOf(cornerNo: number): 'A동' | 'B동' {
+  return [1, 2, 3, 4].includes(cornerNo) ? 'A동' : 'B동'
+}
+
 // ── 방 번호 추출 ──────────────────────────────────────────
 function roomNum(name: string) {
   return name.match(/(\d+)호/)?.[1] ?? '?'
@@ -45,10 +56,22 @@ function sectionLabel(rooms: Room[]) {
 }
 
 // ── 방 칩 ────────────────────────────────────────────────
-function RoomChip({ room }: { room: Room }) {
+function RoomChip({ room, operating }: { room: Room; operating: boolean }) {
   const num     = roomNum(room.name)
   const isOrgan = room.name.includes('오르간')
   const period  = room.available_periods[0]
+
+  // 운영외 시간이면 모두 회색
+  if (!operating) {
+    return (
+      <div className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-40">
+        <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+        <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
+        {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
+        <span className="text-[10px] text-gray-400 leading-none">운영외</span>
+      </div>
+    )
+  }
 
   if (room.occupied) {
     return (
@@ -129,8 +152,10 @@ export default function HomePage() {
   const updatedAt  = status?.updated_at.slice(11, 16) ?? null
   const floorData  = byFloor[activeFloor] ?? {}
   const corners    = Object.keys(floorData).map(Number).sort((a, b) => a - b)
+  const operating  = isOperatingHours(new Date(now))
 
   function floorAvailable(floor: number) {
+    if (!operating) return 0
     return Object.values(byFloor[floor] ?? {})
       .flat()
       .filter((r) => r.available_periods.length > 0).length
@@ -168,28 +193,34 @@ export default function HomePage() {
           <p className="text-rb-200 text-sm">
             키오스크 실시간 연동{updatedAt && <span> · {updatedAt} 갱신</span>}
           </p>
-          {/* 프로필 칩 */}
+          {/* 프로필 칩 → 마이페이지 */}
           {profile && (
-            <span className="text-[11px] text-rb-200 font-medium">
-              {profile.nickname} · {profile.department}
-            </span>
+            <Link href="/mypage" className="text-[11px] text-rb-200 font-medium hover:text-white transition-colors active:opacity-70 flex items-center gap-1">
+              {profile.nickname} · {profile.department} ›
+            </Link>
           )}
         </div>
 
         {/* 요약 통계 */}
         {status && (
-          <div className="flex gap-2 mt-3">
-            {[
-              { label: '전체',   value: status.total,          color: 'bg-rb-700 text-rb-100' },
-              { label: '사용중', value: status.occupied_count,  color: 'bg-rb-800 text-rb-200' },
-              { label: '공실',   value: status.available_count, color: 'bg-emerald-600 text-emerald-50' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className={`flex-1 rounded-xl ${color} py-1.5 text-center`}>
-                <p className="text-base font-bold leading-none">{value}</p>
-                <p className="text-[10px] mt-0.5 opacity-80">{label}</p>
-              </div>
-            ))}
-          </div>
+          operating ? (
+            <div className="flex gap-2 mt-3">
+              {[
+                { label: '전체',   value: status.total,          color: 'bg-rb-700 text-rb-100' },
+                { label: '사용중', value: status.occupied_count,  color: 'bg-rb-800 text-rb-200' },
+                { label: '공실',   value: status.available_count, color: 'bg-emerald-600 text-emerald-50' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className={`flex-1 rounded-xl ${color} py-1.5 text-center`}>
+                  <p className="text-base font-bold leading-none">{value}</p>
+                  <p className="text-[10px] mt-0.5 opacity-80">{label}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl bg-rb-700 px-4 py-2 text-center">
+              <p className="text-rb-200 text-xs font-medium">🌙 운영 시간 외 · 07:00 – 22:00 운영</p>
+            </div>
+          )
         )}
       </header>
 
@@ -268,26 +299,31 @@ export default function HomePage() {
 
         {/* 구역별 방 그리드 */}
         {status && corners.map((cornerNo) => {
-          const rooms = floorData[cornerNo]
+          const rooms     = floorData[cornerNo]
           if (!rooms?.length) return null
-          const availCount = rooms.filter((r) => r.available_periods.length > 0).length
+          const availCount = operating
+            ? rooms.filter((r) => r.available_periods.length > 0).length
+            : 0
+          const building  = buildingOf(cornerNo)
           return (
             <section key={cornerNo}>
               <div className="flex items-center justify-between mb-2.5">
                 <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {activeFloor}층 · {sectionLabel(rooms)}
+                  {activeFloor}층 · <span className="text-rb-500">{building}</span> · {sectionLabel(rooms)}
                 </h2>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  availCount > 0
+                  !operating
+                    ? 'bg-gray-100 text-gray-400'
+                    : availCount > 0
                     ? 'bg-emerald-50 text-emerald-700'
                     : 'bg-gray-100 text-gray-500'
                 }`}>
-                  {availCount > 0 ? `공실 ${availCount}개` : '모두 사용중'}
+                  {!operating ? '운영외' : availCount > 0 ? `공실 ${availCount}개` : '모두 사용중'}
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} />
+                  <RoomChip key={room.name} room={room} operating={operating} />
                 ))}
               </div>
             </section>
@@ -323,23 +359,7 @@ export default function HomePage() {
 
       {/* ── 하단 버튼 ── */}
       <div className="px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+24px)] space-y-2.5">
-        {/* 대기보고 + 토스 */}
-        <div className="flex gap-2">
-          <Link
-            href="/report"
-            className="flex-[3] flex items-center justify-center h-13 rounded-2xl bg-rb-600 text-white text-sm font-bold shadow-md active:scale-[0.98] transition-transform"
-          >
-            📣 대기 보고하기
-          </Link>
-          <button
-            onClick={() => setShowTossSheet(true)}
-            className="flex-1 flex flex-col items-center justify-center h-13 rounded-2xl bg-red-500 text-white text-xs font-bold active:scale-[0.98] transition-transform gap-0.5 shadow-md"
-          >
-            <span>🚨</span>
-            <span>토스</span>
-          </button>
-        </div>
-        {/* 보조 기능 */}
+        {/* 보조 기능 3개 + 토스 */}
         <div className="grid grid-cols-4 gap-2">
           <Link href="/alarm"
             className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
@@ -353,11 +373,20 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
             <span>🔄</span><span>양도·교환</span>
           </Link>
-          <Link href="/mypage"
-            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
-            <span>🏆</span><span>마이페이지</span>
-          </Link>
+          <button
+            onClick={() => setShowTossSheet(true)}
+            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-red-500 text-white text-xs font-bold active:scale-[0.98] transition-transform gap-0.5 shadow-md"
+          >
+            <span>🚨</span><span>토스</span>
+          </button>
         </div>
+        {/* 대기 보고하기 — 풀너비 */}
+        <Link
+          href="/report"
+          className="flex items-center justify-center w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md active:scale-[0.98] transition-transform"
+        >
+          📣 대기 보고하기
+        </Link>
         <Link href="/facility-report"
           className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
           <span>📋 시설 신문고</span>
