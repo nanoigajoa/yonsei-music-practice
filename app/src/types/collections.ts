@@ -48,6 +48,17 @@ export interface FcmToken {
   updatedAt: Timestamp
 }
 
+export const DEPARTMENTS = ['피아노과', '성악과', '관현악과', '교회음악과', '작곡과'] as const
+export type Department = typeof DEPARTMENTS[number]
+
+export interface UserProfile {
+  uid: string
+  nickname: string
+  department: Department | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
 export interface AlarmSession {
   id?: string
   userId: string
@@ -85,4 +96,5 @@ export const COLLECTIONS = {
   FCM_TOKENS:     'fcm_tokens',        // users/{uid}/fcm_tokens/{tokenId}
   ALARM_SESSIONS:    'alarm_sessions',
   FACILITY_REPORTS:  'facility_reports',
+  USER_PROFILES:     'user_profiles',
 } as const
