@@ -18,16 +18,38 @@ const QUEUE_OPTIONS = [
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
 
-// 10분 반감기 지수 감쇠 가중 평균
-function weightedAvg(reports: CongestionReport[], nowMs: number): number {
-  const DECAY = 10 * 60 * 1000
+// ── 대기 추정 로직 ────────────────────────────────────────
+// TTL: 20분
+// 비대칭 감쇠: 없음(0) → 5분 반감기 / 대기있음 → 12분 반감기
+// 단일 보고:  반감기 추가 30% 단축 + "추정" 뱃지
+const TTL_MS        = 20 * 60 * 1000
+const HALF_LIFE_NONE = 5  * 60 * 1000   // queueCount === 0
+const HALF_LIFE_BUSY = 12 * 60 * 1000   // queueCount  >  0
+const SINGLE_FACTOR  = 0.7              // 1명 보고 시 반감기 × 0.7
+
+function computeFloorStatus(reports: CongestionReport[], nowMs: number): FloorStatus {
+  const recent = reports.filter((r) => nowMs - r.createdAt.toMillis() < TTL_MS)
+  if (recent.length === 0) return { avg: null, reportCount: 0, lastAt: null, isEstimate: false }
+
+  const isEstimate = recent.length === 1
   let wSum = 0, wTotal = 0
-  for (const r of reports) {
-    const w = Math.pow(0.5, (nowMs - r.createdAt.toMillis()) / DECAY)
+
+  for (const r of recent) {
+    const age = nowMs - r.createdAt.toMillis()
+    let halfLife = r.queueCount === 0 ? HALF_LIFE_NONE : HALF_LIFE_BUSY
+    if (isEstimate) halfLife *= SINGLE_FACTOR
+    const w = Math.pow(0.5, age / halfLife)
     wSum += r.queueCount * w
     wTotal += w
   }
-  return wTotal > 0 ? wSum / wTotal : 0
+
+  const sorted = [...recent].sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+  return {
+    avg:         wTotal > 0 ? wSum / wTotal : 0,
+    reportCount: recent.length,
+    lastAt:      sorted[0].createdAt.toDate(),
+    isEstimate,
+  }
 }
 
 function statusConfig(avg: number | null) {
@@ -66,8 +88,10 @@ function timeAgo(date: Date, nowMs: number) {
 }
 
 interface FloorStatus {
-  avg: number | null
-  lastAt: Date | null
+  avg:         number | null
+  reportCount: number
+  lastAt:      Date | null
+  isEstimate:  boolean
 }
 
 function getErrMsg(e: unknown): string {
@@ -86,9 +110,9 @@ export default function ReportPage() {
   const [now, setNow]               = useState(Date.now())
   const [reports, setReports]       = useState<CongestionReport[]>([])
   const [floorStatus, setFloorStatus] = useState<Record<number, FloorStatus>>({
-    1: { avg: null, lastAt: null },
-    2: { avg: null, lastAt: null },
-    3: { avg: null, lastAt: null },
+    1: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
+    2: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
+    3: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
   })
 
   // 1분마다 now 갱신
@@ -110,20 +134,15 @@ export default function ReportPage() {
     })
   }, [])
 
-  // 30분 TTL + 가중 평균 재계산
+  // 층별 대기 현황 재계산 (reports 또는 now 변경 시)
   useEffect(() => {
-    const cutoff = now - 30 * 60 * 1000
-    const recent = reports.filter((r) => r.createdAt.toMillis() > cutoff)
     const next: Record<number, FloorStatus> = {
-      1: { avg: null, lastAt: null },
-      2: { avg: null, lastAt: null },
-      3: { avg: null, lastAt: null },
+      1: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
+      2: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
+      3: { avg: null, reportCount: 0, lastAt: null, isEstimate: false },
     }
     ;[1, 2, 3].forEach((f) => {
-      const fr = recent.filter((r) => r.floor === f)
-      if (fr.length === 0) return
-      const sorted = [...fr].sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-      next[f] = { avg: weightedAvg(fr, now), lastAt: sorted[0].createdAt.toDate() }
+      next[f] = computeFloorStatus(reports.filter((r) => r.floor === f), now)
     })
     setFloorStatus(next)
   }, [reports, now])
@@ -175,7 +194,7 @@ export default function ReportPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold text-white">키오스크 대기 현황</h1>
-          <p className="text-rb-200 text-xs mt-0.5">최근 30분 보고 기준 · 크라우드소싱</p>
+          <p className="text-rb-200 text-xs mt-0.5">최근 20분 보고 기준 · 크라우드소싱</p>
         </div>
       </header>
 
@@ -189,25 +208,40 @@ export default function ReportPage() {
             return (
               <div key={f} className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-5 py-4">
+                  {/* 상단: 층 이름 + 신뢰도 정보 */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2.5">
                       <div className={`w-3 h-3 rounded-full ${cfg.dot} flex-shrink-0`} />
                       <span className="text-base font-bold text-gray-900">{f}층 키오스크</span>
                     </div>
-                    {st.lastAt
-                      ? <span className="text-xs text-gray-400">{timeAgo(st.lastAt, now)}</span>
-                      : <span className="text-xs text-gray-300">보고 없음</span>
-                    }
+                    {st.lastAt ? (
+                      <span className="text-xs text-gray-400">
+                        {timeAgo(st.lastAt, now)} · {st.isEstimate
+                          ? <span className="text-amber-500 font-semibold">추정</span>
+                          : <span>{st.reportCount}명 보고</span>
+                        }
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-300">보고 없음</span>
+                    )}
                   </div>
+                  {/* 상태 레이블 */}
                   <div className="flex items-center justify-between">
                     <span className={`text-lg font-bold ${cfg.text}`}>{cfg.label}</span>
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.badge}`}>
                       {cfg.sub}
                     </span>
                   </div>
+                  {/* 혼잡도 바 */}
                   <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-500 ${cfg.bar} ${cfg.barWidth}`} />
+                    <div className={`h-full rounded-full transition-all duration-500 ${cfg.bar} ${cfg.barWidth} ${st.isEstimate ? 'opacity-50' : ''}`} />
                   </div>
+                  {/* 추정 안내 */}
+                  {st.isEstimate && (
+                    <p className="text-[11px] text-amber-500 mt-1.5">
+                      ⚠ 1명 보고 기준 · 실제와 다를 수 있어요
+                    </p>
+                  )}
                 </div>
               </div>
             )
