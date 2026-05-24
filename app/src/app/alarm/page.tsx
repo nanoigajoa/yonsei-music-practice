@@ -81,15 +81,26 @@ function TimerScreen({ reservedAt, endTime, roomHint }: {
             </div>
           </div>
           {endTime && (
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 text-base">🔔</span>
-              <div>
-                <p className="text-sm font-bold text-gray-900">반납 리마인더</p>
-                <p className="text-sm text-gray-500">
-                  {toHHMM(new Date(endTime.getTime() - 15 * 60 * 1000))} · {toHHMM(new Date(endTime.getTime() - 5 * 60 * 1000))}
-                </p>
+            <>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-base">🔔</span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">연장 리마인더</p>
+                  <p className="text-sm text-gray-500">
+                    {toHHMM(new Date(endTime.getTime() - 40 * 60 * 1000))} — 연장 여부 결정
+                  </p>
+                </div>
               </div>
-            </div>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-base">🔔</span>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">반납 리마인더</p>
+                  <p className="text-sm text-gray-500">
+                    {toHHMM(new Date(endTime.getTime() - 10 * 60 * 1000))} — 10분 전 반납 알림
+                  </p>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -174,16 +185,17 @@ export default function AlarmPage() {
     setSubmitting(true)
     try {
       await addDoc(collection(db, COLLECTIONS.ALARM_SESSIONS), {
-        userId:           user.uid,
-        reservedAt:       Timestamp.fromDate(resolved),
-        endTime:          resolvedEnd ? Timestamp.fromDate(resolvedEnd) : null,
-        roomHint:         roomHint.trim() || null,
-        notified5:        false,
-        notified1:        false,
-        notifiedReturn15: false,
-        notifiedReturn5:  false,
-        status:           'active',
-        createdAt:        serverTimestamp(),
+        userId:            user.uid,
+        reservedAt:        Timestamp.fromDate(resolved),
+        endTime:           resolvedEnd ? Timestamp.fromDate(resolvedEnd) : null,
+        roomHint:          roomHint.trim() || null,
+        notified5:         false,
+        notified1:         false,
+        notifiedReturn40:  false,
+        notifiedReturn10:  false,
+        practiceLogged:    false,
+        status:            'active',
+        createdAt:         serverTimestamp(),
       })
       setReservedAt(resolved)
       setEndTime(resolvedEnd)
