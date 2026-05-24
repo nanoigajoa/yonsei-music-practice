@@ -12,14 +12,17 @@ main.py - 연습실 현황 API 서버
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 import collector
 from models import StatusResponse
+
+PUSH_SECRET = os.getenv("PUSH_SECRET", "")
 
 # ── 로깅 ───────────────────────────────────────────────
 logging.basicConfig(
@@ -52,8 +55,8 @@ app.state.poll_interval = 60  # 초 단위, 필요 시 변경
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 프론트 도메인으로 좁혀도 됨
-    allow_methods=["GET"],
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 # ──────────────────────────────────────────────────────
@@ -130,6 +133,22 @@ async def stream(request: Request):
             "X-Accel-Buffering": "no",  # nginx 버퍼링 비활성화
         },
     )
+
+
+@app.post("/push")
+async def push(
+    data: StatusResponse,
+    x_push_secret: str = Header(default=""),
+):
+    """캠퍼스 네트워크 안의 pusher.py가 스크레이핑 결과를 업로드하는 엔드포인트."""
+    if PUSH_SECRET and x_push_secret != PUSH_SECRET:
+        raise HTTPException(401, "Invalid push secret")
+    async with collector._lock:
+        collector._state = data
+    await collector._notify()
+    log.info("push 수신 | 전체 %d개 | 사용중 %d | 예약가능 %d",
+             data.total, data.occupied_count, data.available_count)
+    return {"ok": True, "total": data.total}
 
 
 def _sse(data: dict) -> str:
