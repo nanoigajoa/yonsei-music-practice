@@ -208,6 +208,10 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
         all_rooms.extend(rooms)
         await asyncio.sleep(INTER_CORNER_DELAY)
 
+    if not all_rooms:
+        log.warning("방 목록이 비어있습니다 — 키오스크 접근 불가 또는 push 모드. 기존 상태 유지.")
+        return
+
     occupied_count = sum(1 for r in all_rooms if r.occupied)
     available_count = sum(1 for r in all_rooms if r.available_periods)
 
