@@ -359,6 +359,13 @@ export default function HomePage() {
 
       {/* ── 하단 버튼 ── */}
       <div className="px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+24px)] space-y-2.5">
+        {/* 대기 보고하기 — 풀너비 */}
+        <Link
+          href="/report"
+          className="flex items-center justify-center w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md active:scale-[0.98] transition-transform"
+        >
+          📣 대기 보고하기
+        </Link>
         {/* 보조 기능 3개 + 토스 */}
         <div className="grid grid-cols-4 gap-2">
           <Link href="/alarm"
@@ -380,13 +387,6 @@ export default function HomePage() {
             <span>🚨</span><span>토스</span>
           </button>
         </div>
-        {/* 대기 보고하기 — 풀너비 */}
-        <Link
-          href="/report"
-          className="flex items-center justify-center w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md active:scale-[0.98] transition-transform"
-        >
-          📣 대기 보고하기
-        </Link>
         <Link href="/facility-report"
           className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
           <span>📋 시설 신문고</span>
