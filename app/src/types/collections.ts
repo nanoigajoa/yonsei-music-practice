@@ -65,11 +65,25 @@ export interface AlarmSession {
   reservedAt: Timestamp
   endTime: Timestamp | null
   roomHint: string | null
-  notified5: boolean
-  notified1: boolean
-  notifiedReturn15: boolean
-  notifiedReturn5: boolean
+  notified5: boolean          // T+5분 태그 중간 경고
+  notified1: boolean          // T+9분 마지막 경고
+  notifiedReturn40: boolean   // 종료 40분 전 연장 알림
+  notifiedReturn10: boolean   // 종료 10분 전 반납 알림
+  practiceLogged: boolean     // 연습 기록 생성 완료 여부
   status: 'active' | 'expired'
+  createdAt: Timestamp
+}
+
+export interface PracticeSession {
+  id?: string
+  uid: string
+  department: Department | null
+  nickname: string | null
+  roomHint: string | null
+  startedAt: Timestamp
+  endedAt: Timestamp
+  durationMin: number         // 분 단위 (endedAt - startedAt)
+  source: 'alarm' | 'manual'
   createdAt: Timestamp
 }
 
@@ -89,12 +103,13 @@ export interface FacilityReport {
 
 // Firestore 컬렉션 경로 상수
 export const COLLECTIONS = {
-  CONGESTION:     'congestion_reports',
-  ROOMS:          'rooms',
-  EARLY_RETURN:   'early_returns',
-  TRANSFERS:      'transfer_requests',
-  FCM_TOKENS:     'fcm_tokens',        // users/{uid}/fcm_tokens/{tokenId}
+  CONGESTION:        'congestion_reports',
+  ROOMS:             'rooms',
+  EARLY_RETURN:      'early_returns',
+  TRANSFERS:         'transfer_requests',
+  FCM_TOKENS:        'fcm_tokens',        // users/{uid}/fcm_tokens/{tokenId}
   ALARM_SESSIONS:    'alarm_sessions',
   FACILITY_REPORTS:  'facility_reports',
   USER_PROFILES:     'user_profiles',
+  PRACTICE_SESSIONS: 'practice_sessions',
 } as const

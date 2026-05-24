@@ -34,9 +34,8 @@ export async function POST(req: NextRequest) {
 
   const now = Date.now()
 
-  // endTime이 있는 활성 세션 중 "현재 기준 최대 16분 후 이내에 종료되는" 것만 조회
-  // — 단일 필드 범위 쿼리로 복합 인덱스 없이 동작
-  const windowEnd = Timestamp.fromMillis(now + 16 * 60 * 1000)
+  // endTime 기준: 최대 42분 후 이내에 종료되는 세션 조회 (40분 알림 + 2분 버퍼)
+  const windowEnd   = Timestamp.fromMillis(now + 42 * 60 * 1000)
   const windowStart = Timestamp.fromMillis(now - 60 * 60 * 1000) // 과거 1시간 안전 버퍼
 
   const snap = await getAdminDb()
@@ -52,43 +51,44 @@ export async function POST(req: NextRequest) {
   for (const doc of snap.docs) {
     const data = doc.data()
 
-    // 이미 만료됐거나 endTime 없는 세션 제외 (클라이언트 필터)
+    // 만료됐거나 endTime 없는 세션 제외
     if (data.status !== 'active' || !data.endTime) continue
 
-    const endMs = (data.endTime as Timestamp).toMillis()
-    const remaining = endMs - now // 종료까지 남은 밀리초
+    const endMs     = (data.endTime as Timestamp).toMillis()
+    const remaining = endMs - now
 
-    // 15분 전 알림: 남은 시간이 15분 이하이고 아직 미발송
-    if (!data.notifiedReturn15 && remaining <= 15 * 60 * 1000) {
+    // ── 40분 전 연장 알림 ─────────────────────────────────
+    if (!data.notifiedReturn40 && remaining <= 40 * 60 * 1000) {
       batch.update(doc.ref, {
-        notifiedReturn15: true,
+        notifiedReturn40: true,
         updatedAt: FieldValue.serverTimestamp(),
       })
+      const mins = Math.round(remaining / 60000)
       tasks.push(
         getUserTokens(data.userId).then((tokens) =>
           sendFcm(
             tokens,
-            '⏰ 15분 후 예약 종료',
-            '반납 또는 연장을 준비하세요',
-            '/alarm',
+            `⏰ ${mins}분 후 예약 종료`,
+            '연장하려면 지금 키오스크로! 아니면 조기 반납을 등록해주세요 🙏',
+            '/early-return',
           ),
         ),
       )
       processed++
     }
 
-    // 5분 전 알림: 남은 시간이 5분 이하이고 아직 미발송
-    if (!data.notifiedReturn5 && remaining <= 5 * 60 * 1000) {
+    // ── 10분 전 반납 알림 ─────────────────────────────────
+    if (!data.notifiedReturn10 && remaining <= 10 * 60 * 1000) {
       batch.update(doc.ref, {
-        notifiedReturn5: true,
+        notifiedReturn10: true,
         updatedAt: FieldValue.serverTimestamp(),
       })
       tasks.push(
         getUserTokens(data.userId).then((tokens) =>
           sendFcm(
             tokens,
-            '곧 종료돼요',
-            '5분 후 종료 — 조기 반납으로 학우에게 양보하기 🙏',
+            '🚪 10분 후 반납 시간',
+            '반납 후 키오스크 카드를 꼭 빼주세요. 조기 반납하면 다른 학우에게 알림이 가요!',
             '/early-return',
           ),
         ),

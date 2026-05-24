@@ -353,6 +353,10 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
             <span>🔄</span><span>양도·교환</span>
           </Link>
+          <Link href="/mypage"
+            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
+            <span>🏆</span><span>마이페이지</span>
+          </Link>
         </div>
         <Link href="/facility-report"
           className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
