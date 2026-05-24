@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import duckdb
 import httpx
 from bs4 import BeautifulSoup
 
@@ -22,6 +23,7 @@ API_URL      = os.getenv("KIOSK_API_URL", "https://yonsei-practice-api.fly.dev")
 PUSH_SECRET  = os.getenv("PUSH_SECRET",   "ujBAVj56uI7ZEam0Q4uK4DZhzdcYyW9Hi4IQsAe5GQc")
 INTERVAL     = int(os.getenv("PUSH_INTERVAL", "60"))   # 초
 ROOMS_FILE   = Path(__file__).parent / "api" / "rooms.json"
+DB_PATH      = Path(os.getenv("SNAPSHOT_DB", Path.home() / ".yonsei-practice" / "snapshots.duckdb"))
 
 HEADERS      = {"User-Agent": "Mozilla/5.0 (compatible; practice-room-monitor/1.0)"}
 REQUEST_TIMEOUT    = 10.0
@@ -164,12 +166,68 @@ def _load_corners() -> List[int]:
         return sorted(int(k) for k in json.load(f))
 
 
+# ── DuckDB 저장 ───────────────────────────────────────
+def _init_db() -> None:
+    """DB 파일·테이블 초기화 (없으면 생성)."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect(str(DB_PATH))
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS room_snapshots (
+            captured_at      TIMESTAMPTZ NOT NULL,
+            day_of_week      TINYINT     NOT NULL,
+            hour_of_day      TINYINT     NOT NULL,
+            minute_of_day    TINYINT     NOT NULL,
+            room_name        VARCHAR     NOT NULL,
+            floor            TINYINT     NOT NULL,
+            corner_no        TINYINT     NOT NULL,
+            occupied         BOOLEAN     NOT NULL,
+            occupied_until   VARCHAR,
+            avail_count      TINYINT     NOT NULL,
+            next_avail_start VARCHAR,
+            next_avail_end   VARCHAR
+        )
+    """)
+    con.close()
+    log.info("🦆 DuckDB 초기화 완료 | %s", DB_PATH)
+
+
+def _save_snapshot(rooms: List[dict], captured_at: datetime) -> None:
+    """현재 방 상태 스냅샷을 DuckDB에 저장."""
+    dow = captured_at.weekday()   # 0=월 … 6=일
+    rows = [
+        (
+            captured_at,
+            dow,
+            captured_at.hour,
+            captured_at.minute,
+            r["name"],
+            r["floor"],
+            r["corner_no"],
+            r["occupied"],
+            r.get("occupied_until"),
+            len(r["available_periods"]),
+            r["available_periods"][0]["start"] if r["available_periods"] else None,
+            r["available_periods"][0]["end"]   if r["available_periods"] else None,
+        )
+        for r in rooms
+    ]
+    con = duckdb.connect(str(DB_PATH))
+    con.executemany(
+        "INSERT INTO room_snapshots VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+    con.close()
+# ──────────────────────────────────────────────────────
+
+
 async def run():
     corners = _load_corners()
+    _init_db()
     log.info("pusher 시작 | %d개 코너 | %ds 간격 | → %s", len(corners), INTERVAL, API_URL)
 
     async with httpx.AsyncClient(headers=HEADERS) as client:
         while True:
+            now = datetime.now()
             try:
                 all_rooms: List[dict] = []
                 for corner_no in corners:
@@ -181,7 +239,7 @@ async def run():
                 available_count = sum(1 for r in all_rooms if r["available_periods"])
 
                 payload = {
-                    "updated_at":      datetime.now().isoformat(timespec="seconds"),
+                    "updated_at":      now.isoformat(timespec="seconds"),
                     "total":           len(all_rooms),
                     "occupied_count":  occupied_count,
                     "available_count": available_count,
@@ -197,6 +255,13 @@ async def run():
                 resp.raise_for_status()
                 log.info("✅ 업로드 완료 | 전체 %d개 | 사용중 %d | 공실 %d",
                          len(all_rooms), occupied_count, available_count)
+
+                # DuckDB 로컬 저장 (실패해도 pusher 중단 안 함)
+                try:
+                    _save_snapshot(all_rooms, now)
+                    log.info("🦆 DuckDB 저장 | %d rows", len(all_rooms))
+                except Exception as db_err:
+                    log.warning("DuckDB 저장 실패 (계속): %s", db_err)
 
             except Exception as e:
                 log.error("❌ 오류: %s", e)
