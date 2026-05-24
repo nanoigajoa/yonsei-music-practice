@@ -1,22 +1,74 @@
 'use client'
 
-import { useState } from 'react'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { useEffect, useState } from 'react'
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
-import { COLLECTIONS } from '@/types/collections'
+import { CongestionReport, COLLECTIONS } from '@/types/collections'
 
 const QUEUE_OPTIONS = [
-  { label: '없음',     sub: '대기 없어요',    value: 0,  icon: '🟢' },
-  { label: '1–2명',   sub: '잠깐 기다려요',  value: 1,  icon: '🟡' },
-  { label: '3–5명',   sub: '조금 붐벼요',    value: 3,  icon: '🟠' },
-  { label: '6–10명',  sub: '많이 기다려요',  value: 6,  icon: '🔴' },
+  { label: '없음',      sub: '대기 없어요',   value: 0,  icon: '🟢' },
+  { label: '1–2명',    sub: '잠깐 기다려요', value: 1,  icon: '🟡' },
+  { label: '3–5명',    sub: '조금 붐벼요',   value: 3,  icon: '🟠' },
+  { label: '6–10명',   sub: '많이 기다려요', value: 6,  icon: '🔴' },
   { label: '10명 이상', sub: '매우 혼잡해요', value: 11, icon: '🔴' },
 ]
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
+
+// 10분 반감기 지수 감쇠 가중 평균
+function weightedAvg(reports: CongestionReport[], nowMs: number): number {
+  const DECAY = 10 * 60 * 1000
+  let wSum = 0, wTotal = 0
+  for (const r of reports) {
+    const w = Math.pow(0.5, (nowMs - r.createdAt.toMillis()) / DECAY)
+    wSum += r.queueCount * w
+    wTotal += w
+  }
+  return wTotal > 0 ? wSum / wTotal : 0
+}
+
+function statusConfig(avg: number | null) {
+  if (avg === null) return {
+    label: '정보 없음', sub: '아직 보고가 없어요',
+    dot: 'bg-gray-300', text: 'text-gray-500',
+    badge: 'bg-gray-100 text-gray-500', bar: 'bg-gray-200', barWidth: 'w-0',
+  }
+  if (avg === 0) return {
+    label: '한산해요', sub: '대기 없음',
+    dot: 'bg-emerald-400', text: 'text-emerald-700',
+    badge: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-400', barWidth: 'w-1/12',
+  }
+  if (avg <= 2) return {
+    label: `약 ${Math.round(avg)}명 대기`, sub: '잠깐 기다려요',
+    dot: 'bg-yellow-400', text: 'text-yellow-700',
+    badge: 'bg-yellow-50 text-yellow-700', bar: 'bg-yellow-400', barWidth: 'w-3/12',
+  }
+  if (avg <= 5) return {
+    label: `약 ${Math.round(avg)}명 대기`, sub: '조금 붐벼요',
+    dot: 'bg-orange-400', text: 'text-orange-700',
+    badge: 'bg-orange-50 text-orange-700', bar: 'bg-orange-400', barWidth: 'w-6/12',
+  }
+  return {
+    label: `약 ${Math.round(avg)}명 대기`, sub: '매우 혼잡해요',
+    dot: 'bg-red-500', text: 'text-red-700',
+    badge: 'bg-red-50 text-red-700', bar: 'bg-red-500', barWidth: 'w-10/12',
+  }
+}
+
+function timeAgo(date: Date, nowMs: number) {
+  const mins = Math.floor((nowMs - date.getTime()) / 60000)
+  if (mins < 1) return '방금'
+  if (mins < 60) return `${mins}분 전`
+  return `${Math.floor(mins / 60)}시간 전`
+}
+
+interface FloorStatus {
+  avg: number | null
+  lastAt: Date | null
+}
 
 function getErrMsg(e: unknown): string {
   if (e instanceof Error) return e.message
@@ -27,10 +79,54 @@ export default function ReportPage() {
   const { user } = useAnonymousAuth()
   const router = useRouter()
 
-  const [floor, setFloor] = useState<1 | 2 | 3 | null>(null)
+  const [floor, setFloor]           = useState<1 | 2 | 3 | null>(null)
   const [queueValue, setQueueValue] = useState<number | null>(null)
-  const [status, setStatus] = useState<Status>('idle')
-  const [errMsg, setErrMsg] = useState('')
+  const [status, setStatus]         = useState<Status>('idle')
+  const [errMsg, setErrMsg]         = useState('')
+  const [now, setNow]               = useState(Date.now())
+  const [reports, setReports]       = useState<CongestionReport[]>([])
+  const [floorStatus, setFloorStatus] = useState<Record<number, FloorStatus>>({
+    1: { avg: null, lastAt: null },
+    2: { avg: null, lastAt: null },
+    3: { avg: null, lastAt: null },
+  })
+
+  // 1분마다 now 갱신
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
+
+  // 오늘 보고 실시간 구독
+  useEffect(() => {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const q = query(
+      collection(db, COLLECTIONS.CONGESTION),
+      where('createdAt', '>=', Timestamp.fromDate(todayStart)),
+    )
+    return onSnapshot(q, (snap) => {
+      setReports(snap.docs.map((d) => ({ ...(d.data() as CongestionReport), id: d.id })))
+    })
+  }, [])
+
+  // 30분 TTL + 가중 평균 재계산
+  useEffect(() => {
+    const cutoff = now - 30 * 60 * 1000
+    const recent = reports.filter((r) => r.createdAt.toMillis() > cutoff)
+    const next: Record<number, FloorStatus> = {
+      1: { avg: null, lastAt: null },
+      2: { avg: null, lastAt: null },
+      3: { avg: null, lastAt: null },
+    }
+    ;[1, 2, 3].forEach((f) => {
+      const fr = recent.filter((r) => r.floor === f)
+      if (fr.length === 0) return
+      const sorted = [...fr].sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+      next[f] = { avg: weightedAvg(fr, now), lastAt: sorted[0].createdAt.toDate() }
+    })
+    setFloorStatus(next)
+  }, [reports, now])
 
   async function handleSubmit() {
     if (floor === null || queueValue === null) return
@@ -78,17 +174,57 @@ export default function ReportPage() {
           </svg>
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-white">대기 보고하기</h1>
-          <p className="text-rb-200 text-xs mt-0.5">키오스크 앞 대기 인원을 알려주세요</p>
+          <h1 className="text-xl font-bold text-white">키오스크 대기 현황</h1>
+          <p className="text-rb-200 text-xs mt-0.5">최근 30분 보고 기준 · 크라우드소싱</p>
         </div>
       </header>
 
-      <main className="flex-1 px-4 pt-6 space-y-8">
+      <main className="flex-1 px-4 pt-5 space-y-6 pb-8">
 
-        {/* 층 선택 */}
+        {/* ── 층별 현황 카드 ── */}
+        <section className="space-y-3">
+          {[1, 2, 3].map((f) => {
+            const st  = floorStatus[f]
+            const cfg = statusConfig(st.avg)
+            return (
+              <div key={f} className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-3 h-3 rounded-full ${cfg.dot} flex-shrink-0`} />
+                      <span className="text-base font-bold text-gray-900">{f}층 키오스크</span>
+                    </div>
+                    {st.lastAt
+                      ? <span className="text-xs text-gray-400">{timeAgo(st.lastAt, now)}</span>
+                      : <span className="text-xs text-gray-300">보고 없음</span>
+                    }
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-lg font-bold ${cfg.text}`}>{cfg.label}</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.badge}`}>
+                      {cfg.sub}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${cfg.bar} ${cfg.barWidth}`} />
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </section>
+
+        {/* ── 보고하기 폼 ── */}
         <section>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-px flex-1 bg-gray-100" />
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">내가 보고하기</span>
+            <div className="h-px flex-1 bg-gray-100" />
+          </div>
+
+          {/* 층 선택 */}
           <p className="text-xs font-bold text-rb-600 uppercase tracking-wider mb-3">어느 층 키오스크인가요?</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             {([1, 2, 3] as const).map((f) => (
               <button
                 key={f}
@@ -106,10 +242,8 @@ export default function ReportPage() {
               </button>
             ))}
           </div>
-        </section>
 
-        {/* 대기 인원 선택 */}
-        <section>
+          {/* 대기 인원 선택 */}
           <p className="text-xs font-bold text-rb-600 uppercase tracking-wider mb-3">지금 몇 명이 기다리고 있나요?</p>
           <div className="space-y-2">
             {QUEUE_OPTIONS.map((opt) => (
@@ -139,7 +273,7 @@ export default function ReportPage() {
       </main>
 
       {/* 제출 버튼 */}
-      <div className="px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+      <div className="px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+24px)]">
         {status === 'error' && (
           <>
             <p className="text-center text-sm text-red-500 mb-1 font-medium">보고에 실패했어요. 다시 시도해 주세요.</p>
