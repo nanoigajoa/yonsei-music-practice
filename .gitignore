@@ -33,3 +33,12 @@ app/.vercel
 
 # ── 개발 임시파일 ─────────────────────────────────────
 .dev-pids
+
+# ── 로컬 기획 문서 ────────────────────────────────────
+docs/
+supabase/
+firestore*.rules
+전문가_피드백.md
+1.md
+Pain_point.md
+ai.md
