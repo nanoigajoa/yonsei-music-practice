@@ -23,9 +23,26 @@ function urgencyConfig(remainingMs: number) {
   return                               { dot: 'bg-red-400',       badge: 'bg-red-50 text-red-600',        text: '사용 중' }
 }
 
+// ── 방 번호 → 동 판별 ──────────────────────────────────────
+// A동: corner 1,2,3,4 (107~114, 205~209, 302~307, 406~411)
+// B동: corner 6,8,9   (119~126, 310~317, 416~421)
+function buildingByRoom(hint: string | null): 'A동' | 'B동' | null {
+  if (!hint) return null
+  const n = parseInt(hint.replace(/\D/g, ''))
+  if (isNaN(n)) return null
+  const floor = Math.floor(n / 100)
+  const last  = n % 100
+  if (floor === 1) return last <= 18 ? 'A동' : 'B동'
+  if (floor === 2) return 'A동'
+  if (floor === 3) return last <= 9  ? 'A동' : 'B동'
+  if (floor === 4) return last <= 15 ? 'A동' : 'B동'
+  return null
+}
+
 function RoomCard({ item, now }: { item: RoomStatusItem; now: number }) {
   const remaining = item.endTime ? item.endTime - now : 0
-  const cfg = urgencyConfig(remaining)
+  const cfg      = urgencyConfig(remaining)
+  const building = buildingByRoom(item.roomHint)
   return (
     <div className="flex items-center gap-3 px-4 py-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm">
       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
@@ -35,6 +52,9 @@ function RoomCard({ item, now }: { item: RoomStatusItem; now: number }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {item.floor && <span className="text-xs text-gray-400">{item.floor}층</span>}
+          {building && (
+            <span className="text-[10px] font-bold text-rb-500 bg-rb-50 px-1.5 py-0.5 rounded-full">{building}</span>
+          )}
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg.badge}`}>{cfg.text}</span>
         </div>
         <p className="text-sm font-bold text-gray-900 mt-0.5">

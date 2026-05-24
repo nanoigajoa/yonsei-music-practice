@@ -17,7 +17,6 @@ async function sendFcm(tokens: string[], title: string, body: string) {
 }
 
 export async function POST(req: NextRequest) {
-  // cron 시크릿 검증
   const auth = req.headers.get('Authorization')
   if (!auth || auth !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
   const now = Date.now()
   const twelveMinAgo = Timestamp.fromMillis(now - 12 * 60 * 1000)
 
-  // 최근 12분 이내 활성 세션만 조회 (단일 필드 인덱스, 복합 인덱스 불필요)
+  // 최근 12분 이내 활성 세션만 조회
   const snap = await getAdminDb()
     .collection('alarm_sessions')
     .where('status', '==', 'active')
@@ -47,7 +46,7 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // T+5분 경과, 아직 미발송
+    // T+5분 경과: 중간 경고 (5분 남음)
     if (!data.notified5 && elapsed >= 5 * 60 * 1000) {
       batch.update(doc.ref, { notified5: true })
       tasks.push(
@@ -61,12 +60,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // T+9분 경과, 아직 미발송
-    if (!data.notified1 && elapsed >= 9 * 60 * 1000) {
+    // T+8분 경과: 긴급 경고 (2분 남음)
+    if (!data.notified1 && elapsed >= 8 * 60 * 1000) {
       batch.update(doc.ref, { notified1: true })
       tasks.push(
         getUserTokens(data.userId).then((tokens) =>
-          sendFcm(tokens, '⚠️ 1분 남았어요!', '지금 바로 카드 태그하지 않으면 예약이 취소될 수 있어요.'),
+          sendFcm(tokens, '⚠️ 2분 남았어요!', '지금 바로 카드 태그하지 않으면 예약이 취소될 수 있어요.'),
         ),
       )
     }

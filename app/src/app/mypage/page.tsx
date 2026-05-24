@@ -169,7 +169,7 @@ export default function MyPage() {
   const { profile, isNew, suggestedNickname, rerollNickname, saveProfile } = useUserProfile(user)
 
   const [period,   setPeriod]   = useState<Period>('weekly')
-  const [tab,      setTab]      = useState<'dept' | 'user'>('dept')
+  const [tab,      setTab]      = useState<'dept' | 'user'>('user')
   const [data,     setData]     = useState<RankingsData | null>(null)
   const [loading,  setLoading]  = useState(true)
   const [showLog,  setShowLog]  = useState(false)
@@ -286,17 +286,10 @@ export default function MyPage() {
           </div>
         )}
 
-        {/* ── 랭킹 탭 ── */}
-        <div className="flex gap-2">
-          {(['dept', 'user'] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
-                tab === t ? 'border-rb-600 bg-rb-600 text-white' : 'border-gray-200 text-gray-600'
-              }`}
-            >
-              {t === 'dept' ? '🏫 과별 랭킹' : '🏆 개인 랭킹'}
-            </button>
-          ))}
+        {/* ── 랭킹 탭 (개인만 표시) ── */}
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">🏆 개인 랭킹</p>
+          <div className="h-px flex-1 bg-gray-100" />
         </div>
 
         {loading ? (
