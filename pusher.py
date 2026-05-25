@@ -65,7 +65,9 @@ def _slot_status(li) -> str:
     if bgcolor == "#333333" or "예약불가" in title: return S.BLOCKED
     if "time_blue" in src or "예약된" in title:     return S.BOOKED
     if li.find("a") and ("time_gray" in src or "time_green" in src): return S.AVAILABLE
-    if li.find("a"):                     return S.AVAILABLE
+    if li.find("a"):
+        log.info("⚠ 슬롯분류불명 src=%s title=%s bgcolor=%s", src.split("/")[-1], title[:20], bgcolor)
+        return S.AVAILABLE
     return S.PAST
 
 
@@ -161,7 +163,8 @@ async def _fetch_corner(client: httpx.AsyncClient, corner_no: int) -> List[dict]
             if res.status_code != 200:
                 log.warning("corner_no=%d page=%s HTTP %d", corner_no, page or "1", res.status_code)
                 break
-            rooms = _parse_html(res.text, corner_no)
+            html = res.content.decode(res.encoding or "utf-8", errors="replace")
+            rooms = _parse_html(html, corner_no)
             new_rooms = [r for r in rooms if r["name"] not in seen_names]
             if not new_rooms:
                 break   # 새 방 없음 → 페이지 끝
