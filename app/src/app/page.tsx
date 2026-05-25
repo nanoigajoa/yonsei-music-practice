@@ -103,7 +103,7 @@ function RoomChip({ room, operating }: { room: Room; operating: boolean }) {
       <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
       {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-400 leading-none">예약없음</span>
+      <span className="text-[10px] text-gray-400 leading-none">인증대기</span>
     </div>
   )
 }
