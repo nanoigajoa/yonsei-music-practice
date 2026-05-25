@@ -145,19 +145,36 @@ def _parse_html(html: str, corner_no: int) -> List[dict]:
 
 
 async def _fetch_corner(client: httpx.AsyncClient, corner_no: int) -> List[dict]:
-    try:
-        res = await client.get(
-            KIOSK_URL,
-            params={"corner_no": corner_no, "TimeCellSize": 0, "page": ""},
-            timeout=REQUEST_TIMEOUT,
-        )
-        if res.status_code != 200:
-            log.warning("corner_no=%d HTTP %d", corner_no, res.status_code)
-            return []
-        return _parse_html(res.text, corner_no)
-    except httpx.RequestError as e:
-        log.warning("corner_no=%d 요청 실패: %s", corner_no, e)
-        return []
+    """코너별 전체 방 목록 수집 (페이지 pagination 대응)."""
+    all_rooms: List[dict] = []
+    seen_names: set = set()
+    # 첫 페이지는 ""(빈 문자열), 이후 2, 3, … 으로 순회
+    page_keys = ["", "2", "3", "4"]
+
+    for page in page_keys:
+        try:
+            res = await client.get(
+                KIOSK_URL,
+                params={"corner_no": corner_no, "TimeCellSize": 0, "page": page},
+                timeout=REQUEST_TIMEOUT,
+            )
+            if res.status_code != 200:
+                log.warning("corner_no=%d page=%s HTTP %d", corner_no, page or "1", res.status_code)
+                break
+            rooms = _parse_html(res.text, corner_no)
+            new_rooms = [r for r in rooms if r["name"] not in seen_names]
+            if not new_rooms:
+                break   # 새 방 없음 → 페이지 끝
+            for r in new_rooms:
+                seen_names.add(r["name"])
+            all_rooms.extend(new_rooms)
+            if page:    # 1페이지 이후엔 짧은 딜레이
+                await asyncio.sleep(0.3)
+        except httpx.RequestError as e:
+            log.warning("corner_no=%d page=%s 요청 실패: %s", corner_no, page or "1", e)
+            break
+
+    return all_rooms
 
 
 def _load_corners() -> List[int]:
