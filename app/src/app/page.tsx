@@ -97,12 +97,13 @@ function RoomChip({ room, operating }: { room: Room; operating: boolean }) {
     )
   }
 
+  // 운영 중이지만 가용 슬롯 없음 (예: 오늘 예약이 꽉 찼거나 반납 완료)
   return (
-    <div className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-40">
+    <div className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-50">
       <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
       {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-400 leading-none">운영외</span>
+      <span className="text-[10px] text-gray-400 leading-none">예약없음</span>
     </div>
   )
 }

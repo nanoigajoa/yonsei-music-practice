@@ -92,17 +92,21 @@ export function useRoomStatus() {
       es.close()
       esRef.current = null
       setConnState('error')
+      // SSE 실패 시 REST로 즉시 데이터 확보 후 재연결
+      fetchOnce()
       timerRef.current = setTimeout(connect, RECONNECT_DELAY)
     }
   }, [fetchOnce])
 
   useEffect(() => {
+    // 마운트 즉시 REST fetch로 초기 데이터 확보 (SSE 연결 전)
+    fetchOnce()
     connect()
     return () => {
       esRef.current?.close()
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [connect])
+  }, [connect, fetchOnce])
 
   // ── 층별 그룹 ─────────────────────────────────────────
   const byFloor = status?.rooms.reduce<Record<number, Record<number, Room[]>>>(
