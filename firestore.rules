@@ -53,5 +53,21 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
+
+    // 유저 프로필: 본인 것만 읽기·쓰기 (익명 인증 포함)
+    match /user_profiles/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // 연습 기록: 본인 것만 읽기 (쓰기는 Admin SDK 전용)
+    match /practice_sessions/{docId} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
   }
 }
