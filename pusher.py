@@ -73,7 +73,6 @@ def _slot_status(li) -> str:
 
 def _parse_html(html: str, corner_no: int) -> List[dict]:
     soup  = BeautifulSoup(html, "html.parser")
-    now   = datetime.now()
     rooms = []
 
     for seat_div in soup.select("div.Body-List"):
@@ -117,21 +116,22 @@ def _parse_html(html: str, corner_no: int) -> List[dict]:
             available_periods.append({"start": period_start.strftime("%H:%M"),
                                       "end":   last_dt.strftime("%H:%M")})
 
-        # 현재 슬롯 상태
+        # 현재 슬롯 상태 (키오스크 PAST 마커 기준 — 로컬 시계/타임존 독립)
+        # 키오스크가 직접 "지난 시간" 표시 → PAST 아닌 첫 슬롯 = 현재 슬롯
+        current_idx: Optional[int] = None
         current_status = S.PAST
         for idx in sorted(slots):
-            dt = _slot_to_dt(idx)
-            if dt <= now < dt + timedelta(minutes=SLOT_MINUTES):
+            if slots[idx] != S.PAST:
+                current_idx = idx
                 current_status = slots[idx]
                 break
 
         occupied       = current_status == S.BOOKED
         occupied_until: Optional[str] = None
-        if occupied:
+        if occupied and current_idx is not None:
             for idx in sorted(slots):
-                dt = _slot_to_dt(idx)
-                if dt > now and slots[idx] != S.BOOKED:
-                    occupied_until = dt.strftime("%H:%M")
+                if idx > current_idx and slots[idx] != S.BOOKED:
+                    occupied_until = _slot_to_dt(idx).strftime("%H:%M")
                     break
 
         rooms.append({
