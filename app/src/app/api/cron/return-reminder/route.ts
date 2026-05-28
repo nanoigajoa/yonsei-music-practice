@@ -11,6 +11,15 @@ async function getUserTokens(userId: string): Promise<string[]> {
   return snap.docs.map((d) => d.data().token as string).filter(Boolean)
 }
 
+async function getNotifySettings(userId: string): Promise<{ extend: boolean; return: boolean }> {
+  const snap = await getAdminDb().collection('user_profiles').doc(userId).get()
+  const data = snap.data()
+  return {
+    extend: data?.notifyExtend !== false,
+    return: data?.notifyReturn !== false,
+  }
+}
+
 async function sendFcm(
   tokens: string[],
   title: string,
@@ -25,6 +34,8 @@ async function sendFcm(
     webpush: { fcmOptions: { link: clickAction } },
   })
 }
+
+export const GET = POST
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -65,14 +76,17 @@ export async function POST(req: NextRequest) {
       })
       const mins = Math.round(remaining / 60000)
       tasks.push(
-        getUserTokens(data.userId).then((tokens) =>
-          sendFcm(
-            tokens,
-            `⏰ ${mins}분 후 예약 종료`,
-            '연장하려면 지금 키오스크로! 아니면 조기 반납을 등록해주세요 🙏',
-            '/early-return',
-          ),
-        ),
+        getNotifySettings(data.userId).then(({ extend }) => {
+          if (!extend) return
+          return getUserTokens(data.userId).then((tokens) =>
+            sendFcm(
+              tokens,
+              `⏰ ${mins}분 후 예약 종료`,
+              '연장하려면 지금 키오스크로! 아니면 조기 반납을 등록해주세요 🙏',
+              '/early-return',
+            ),
+          )
+        }),
       )
       processed++
     }
@@ -84,14 +98,17 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       })
       tasks.push(
-        getUserTokens(data.userId).then((tokens) =>
-          sendFcm(
-            tokens,
-            '🚪 10분 후 반납 시간',
-            '반납 후 키오스크 카드를 꼭 빼주세요. 조기 반납하면 다른 학우에게 알림이 가요!',
-            '/early-return',
-          ),
-        ),
+        getNotifySettings(data.userId).then(({ return: ret }) => {
+          if (!ret) return
+          return getUserTokens(data.userId).then((tokens) =>
+            sendFcm(
+              tokens,
+              '🚪 10분 후 반납 시간',
+              '반납 후 키오스크 카드를 꼭 빼주세요. 조기 반납하면 다른 학우에게 알림이 가요!',
+              '/early-return',
+            ),
+          )
+        }),
       )
       processed++
     }

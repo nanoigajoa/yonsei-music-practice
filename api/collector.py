@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -217,7 +217,7 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
 
     async with _lock:
         _state = StatusResponse(
-            updated_at=datetime.now().isoformat(timespec="seconds"),
+            updated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             total=len(all_rooms),
             occupied_count=occupied_count,
             available_count=available_count,

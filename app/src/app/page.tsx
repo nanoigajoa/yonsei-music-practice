@@ -150,7 +150,9 @@ export default function HomePage() {
     setUrgentItems(allUrgentItems.filter((r) => r.createdAt.toMillis() > now - 10 * 60 * 1000))
   }, [allUrgentItems, now])
 
-  const updatedAt  = status?.updated_at.slice(11, 16) ?? null
+  const updatedAt  = status?.updated_at
+    ? new Date(status.updated_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : null
   const floorData  = byFloor[activeFloor] ?? {}
   const corners    = Object.keys(floorData).map(Number).sort((a, b) => a - b)
   const operating  = isOperatingHours(new Date(now))
@@ -393,6 +395,11 @@ export default function HomePage() {
           <span>📋 시설 신문고</span>
           <span className="text-amber-400 text-xs">→</span>
         </Link>
+        <p className="text-center text-[11px] text-gray-300 pt-1">
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-400 transition-colors">
+            개인정보처리방침
+          </Link>
+        </p>
       </div>
 
       {showTossSheet && (

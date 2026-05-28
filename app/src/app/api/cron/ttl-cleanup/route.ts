@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
+export const GET = POST
+
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
   if (!auth || auth !== `Bearer ${CRON_SECRET}`) {

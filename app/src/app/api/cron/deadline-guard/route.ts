@@ -11,10 +11,19 @@ async function getUserTokens(userId: string): Promise<string[]> {
   return snap.docs.map((d) => d.data().token as string).filter(Boolean)
 }
 
+async function isTagNotifyEnabled(userId: string): Promise<boolean> {
+  const snap = await getAdminDb().collection('user_profiles').doc(userId).get()
+  const data = snap.data()
+  // 필드 없으면 기본값 true (기존 사용자 호환)
+  return data?.notifyTag !== false
+}
+
 async function sendFcm(tokens: string[], title: string, body: string) {
   if (tokens.length === 0) return
   await getAdminMessaging().sendEachForMulticast({ tokens, notification: { title, body } })
 }
+
+export const GET = POST
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -50,13 +59,16 @@ export async function POST(req: NextRequest) {
     if (!data.notified5 && elapsed >= 5 * 60 * 1000) {
       batch.update(doc.ref, { notified5: true })
       tasks.push(
-        getUserTokens(data.userId).then((tokens) =>
-          sendFcm(
-            tokens,
-            '태그 확인해주세요',
-            `아직 ${Math.ceil((10 * 60 * 1000 - elapsed) / 60000)}분 남았어요. 방 앞 단말기에 학생증을 태그하세요.`,
-          ),
-        ),
+        isTagNotifyEnabled(data.userId).then((enabled) => {
+          if (!enabled) return
+          return getUserTokens(data.userId).then((tokens) =>
+            sendFcm(
+              tokens,
+              '태그 확인해주세요',
+              `아직 ${Math.ceil((10 * 60 * 1000 - elapsed) / 60000)}분 남았어요. 방 앞 단말기에 학생증을 태그하세요.`,
+            ),
+          )
+        }),
       )
     }
 
@@ -64,9 +76,12 @@ export async function POST(req: NextRequest) {
     if (!data.notified1 && elapsed >= 8 * 60 * 1000) {
       batch.update(doc.ref, { notified1: true })
       tasks.push(
-        getUserTokens(data.userId).then((tokens) =>
-          sendFcm(tokens, '⚠️ 2분 남았어요!', '지금 바로 카드 태그하지 않으면 예약이 취소될 수 있어요.'),
-        ),
+        isTagNotifyEnabled(data.userId).then((enabled) => {
+          if (!enabled) return
+          return getUserTokens(data.userId).then((tokens) =>
+            sendFcm(tokens, '⚠️ 2분 남았어요!', '지금 바로 카드 태그하지 않으면 예약이 취소될 수 있어요.'),
+          )
+        }),
       )
     }
   }
