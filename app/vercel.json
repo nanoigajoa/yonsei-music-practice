@@ -1,7 +1,1 @@
-{
-  "crons": [
-    { "path": "/api/cron/deadline-guard", "schedule": "* * * * *" },
-    { "path": "/api/cron/return-reminder", "schedule": "* * * * *" },
-    { "path": "/api/cron/ttl-cleanup",     "schedule": "*/5 * * * *" }
-  ]
-}
+{}
