@@ -14,6 +14,19 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: '음대 연습실',
   },
+  openGraph: {
+    title: '음대 연습실',
+    description: '연습실 공실 현황을 실시간으로 확인하고, 태그·반납 알림을 받아보세요',
+    type: 'website',
+    locale: 'ko_KR',
+    images: [{ url: '/icons/icon-512x512.png', width: 512, height: 512, alt: '음대 연습실' }],
+  },
+  twitter: {
+    card: 'summary',
+    title: '음대 연습실',
+    description: '연습실 공실 현황을 실시간으로 확인하고, 태그·반납 알림을 받아보세요',
+    images: ['/icons/icon-512x512.png'],
+  },
 }
 
 export const viewport: Viewport = {

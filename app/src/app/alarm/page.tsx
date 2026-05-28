@@ -5,6 +5,7 @@ import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firesto
 import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
+import { useFcmToken } from '@/hooks/useFcmToken'
 import { COLLECTIONS } from '@/types/collections'
 
 type ReservedMode = 'now' | 'manual'
@@ -121,6 +122,7 @@ function TimerScreen({ reservedAt, endTime, roomHint }: {
 // ─── 폼 화면 ──────────────────────────────────────────────────
 export default function AlarmPage() {
   const { user } = useAnonymousAuth()
+  const { permission, requestAndRegister } = useFcmToken(user)
 
   const [reservedMode, setReservedMode] = useState<ReservedMode>('now')
   const [reservedTimeInput, setReservedTimeInput] = useState('')
@@ -183,6 +185,16 @@ export default function AlarmPage() {
     const resolvedEnd = resolveEndTime(resolved)
     setError('')
     setSubmitting(true)
+
+    // FCM 토큰이 없으면 권한 요청 후 등록
+    if (permission !== 'granted') {
+      const granted = await requestAndRegister()
+      if (granted !== 'granted') {
+        setError('알림 권한이 없으면 태그 알림을 받을 수 없어요. 브라우저 설정에서 알림을 허용해 주세요.')
+        setSubmitting(false)
+        return
+      }
+    }
     try {
       await addDoc(collection(db, COLLECTIONS.ALARM_SESSIONS), {
         userId:            user.uid,

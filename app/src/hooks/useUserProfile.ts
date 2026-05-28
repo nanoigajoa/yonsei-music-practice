@@ -42,18 +42,31 @@ export function useUserProfile(user: User | null) {
     const data = { uid: user.uid, nickname: nickname.trim(), department, updatedAt: now }
 
     if (isNew) {
-      await setDoc(ref, { ...data, createdAt: now })
+      await setDoc(ref, {
+        ...data,
+        notifyTag: true, notifyExtend: true, notifyReturn: true,
+        createdAt: now,
+      })
     } else {
       await updateDoc(ref, data)
     }
 
     setProfile((prev) => ({
-      ...(prev ?? { uid: user.uid, createdAt: null as any }),
+      ...(prev ?? { uid: user.uid, notifyTag: true, notifyExtend: true, notifyReturn: true, createdAt: null as any }),
       ...data,
-      updatedAt: null as any,  // 로컬 임시값, 다음 fetch에서 정확히 갱신됨
+      updatedAt: null as any,
     }))
     setIsNew(false)
   }, [user, isNew])
 
-  return { profile, isLoading, isNew, suggestedNickname, rerollNickname, saveProfile }
+  const saveNotifySettings = useCallback(async (
+    settings: Partial<Pick<UserProfile, 'notifyTag' | 'notifyExtend' | 'notifyReturn'>>
+  ) => {
+    if (!user) return
+    const ref = doc(db, COLLECTIONS.USER_PROFILES, user.uid)
+    await updateDoc(ref, { ...settings, updatedAt: serverTimestamp() })
+    setProfile((prev) => prev ? { ...prev, ...settings } : prev)
+  }, [user])
+
+  return { profile, isLoading, isNew, suggestedNickname, rerollNickname, saveProfile, saveNotifySettings }
 }

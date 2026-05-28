@@ -55,6 +55,9 @@ export interface UserProfile {
   uid: string
   nickname: string
   department: Department | null
+  notifyTag:    boolean  // 미인증 태그 알림
+  notifyExtend: boolean  // 연장 리마인더 (40분 전)
+  notifyReturn: boolean  // 반납 리마인더 (10분 전)
   createdAt: Timestamp
   updatedAt: Timestamp
 }
