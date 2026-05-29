@@ -321,16 +321,18 @@ export default function AlarmPage() {
         createdAt:         serverTimestamp(),
       })
 
-      // 즉시 확인 알림 발송
-      const idToken = await user.getIdToken()
-      fetch('/api/alarm/notify', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body:    JSON.stringify({
-          title: '✅ 알림 등록 완료',
-          body:  `${toHHMM(resolved)} 슬롯 태그 알림이 등록됐어요${resolvedEnd ? ` · 반납 ${toHHMM(resolvedEnd)}` : ''}`,
-        }),
-      }).catch(() => {/* 즉시 알림 실패는 무시 */})
+      // 즉시 확인 알림 발송 (실패해도 등록 자체는 유지)
+      try {
+        const idToken = await user.getIdToken()
+        await fetch('/api/alarm/notify', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body:    JSON.stringify({
+            title: '✅ 알림 등록 완료',
+            body:  `${toHHMM(resolved)} 슬롯 태그 알림이 등록됐어요${resolvedEnd ? ` · 반납 ${toHHMM(resolvedEnd)}` : ''}`,
+          }),
+        })
+      } catch { /* 즉시 알림 실패 무시 */ }
 
       setReservedAt(resolved)
       setEndTime(resolvedEnd)

@@ -76,13 +76,23 @@ export function useFcmToken(user: User | null) {
       unsubscribe = onMessage(messaging, async (payload) => {
         const title = payload.notification?.title ?? '연습실 알림'
         const body  = payload.notification?.body  ?? ''
-        const reg   = await navigator.serviceWorker?.getRegistration()
-        reg?.showNotification(title, {
-          body,
-          icon:  '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          data:  payload.data,
-        })
+        // SW registration을 scope '/' 기준으로 찾고, 없으면 Notification API 직접 사용
+        try {
+          const regs = await navigator.serviceWorker?.getRegistrations()
+          const reg  = regs?.find(r => r.active) ?? regs?.[0]
+          if (reg) {
+            await reg.showNotification(title, {
+              body,
+              icon:  '/icons/icon-192x192.png',
+              badge: '/icons/icon-96x96.png',
+              data:  payload.data,
+            })
+          } else {
+            new Notification(title, { body })
+          }
+        } catch {
+          try { new Notification(title, { body }) } catch { /* noop */ }
+        }
       })
     })
     return () => { unsubscribe?.() }
