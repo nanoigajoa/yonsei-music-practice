@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
     const reservedMs = (data.reservedAt as Timestamp).toMillis()
     const elapsed = now - reservedMs
 
-    // T+11분 경과 → 만료
-    if (elapsed >= 11 * 60 * 1000) {
+    // T+10분 경과 → 슬롯 종료, 만료
+    if (elapsed >= 10 * 60 * 1000) {
       batch.update(doc.ref, { status: 'expired', updatedAt: FieldValue.serverTimestamp() })
       continue
     }
