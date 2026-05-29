@@ -6,7 +6,7 @@ import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { DEPARTMENTS, Department } from '@/types/collections'
-import type { RankingsData, DeptRank, UserRank } from '@/app/api/rankings/route'
+import type { RankingsData } from '@/app/api/rankings/route'
 
 type Period = 'daily' | 'weekly' | 'monthly'
 
@@ -26,16 +26,14 @@ const DEPT_EMOJI: Record<string, string> = {
 }
 
 function minToHM(min: number) {
+  if (min === 0) return '0분'
   if (min < 60) return `${min}분`
-  return `${Math.floor(min / 60)}시간 ${min % 60}분`
+  return `${Math.floor(min / 60)}시간 ${min % 60 > 0 ? `${min % 60}분` : ''}`
 }
 
 // ── 프로필 편집 시트 ──────────────────────────────────────
 function EditProfileSheet({
-  initialNickname,
-  initialDept,
-  onClose,
-  onSave,
+  initialNickname, initialDept, onClose, onSave,
 }: {
   initialNickname: string
   initialDept: Department | null
@@ -62,44 +60,29 @@ function EditProfileSheet({
         <div className="w-full max-w-md bg-white rounded-t-3xl px-6 pt-5 pb-[calc(env(safe-area-inset-bottom)+28px)] shadow-2xl">
           <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
           <h2 className="text-lg font-bold text-gray-900 mb-6">프로필 수정</h2>
-
           <div className="mb-5">
             <p className="text-xs font-bold text-rb-600 uppercase tracking-wider mb-2">닉네임</p>
-            <input
-              type="text"
-              value={nickname}
-              maxLength={16}
+            <input type="text" value={nickname} maxLength={16}
               onChange={(e) => setNickname(e.target.value)}
-              className="w-full h-11 rounded-xl border-2 border-gray-200 px-3 text-sm font-bold text-gray-800 focus:border-rb-500 focus:outline-none transition-colors"
-            />
+              className="w-full h-11 rounded-xl border-2 border-gray-200 px-3 text-sm font-bold text-gray-800 focus:border-rb-500 focus:outline-none transition-colors" />
             <p className="text-[11px] text-gray-400 mt-1.5 pl-1">최대 16자</p>
           </div>
-
           <div className="mb-7">
             <p className="text-xs font-bold text-rb-600 uppercase tracking-wider mb-2">소속 과</p>
             <div className="grid grid-cols-2 gap-2">
               {DEPARTMENTS.map((dept) => (
-                <button
-                  key={dept}
-                  onClick={() => setDepartment(dept)}
+                <button key={dept} onClick={() => setDepartment(dept)}
                   className={`flex items-center gap-2.5 h-12 px-3 rounded-xl border-2 font-bold text-sm transition-all active:scale-[0.97] ${
-                    department === dept
-                      ? 'border-rb-600 bg-rb-600 text-white'
-                      : 'border-gray-200 bg-white text-gray-700'
-                  }`}
-                >
+                    department === dept ? 'border-rb-600 bg-rb-600 text-white' : 'border-gray-200 bg-white text-gray-700'
+                  }`}>
                   <span className="text-lg">{DEPT_EMOJI[dept]}</span>
                   <span>{dept}</span>
                 </button>
               ))}
             </div>
           </div>
-
-          <button
-            onClick={handleSave}
-            disabled={!canSave}
-            className="w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md disabled:opacity-30 active:scale-[0.98] transition-all"
-          >
+          <button onClick={handleSave} disabled={!canSave}
+            className="w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md disabled:opacity-30 active:scale-[0.98] transition-all">
             {saving ? '저장 중...' : '저장'}
           </button>
         </div>
@@ -108,94 +91,18 @@ function EditProfileSheet({
   )
 }
 
-function BackIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5M12 5l-7 7 7 7" />
-    </svg>
-  )
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 48 48">
-      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.6 0 6.6 5.5 2.6 13.5l7.8 6C12.3 13.2 17.7 9.5 24 9.5z"/>
-      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17z"/>
-      <path fill="#FBBC05" d="M10.4 28.5A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.1.8-4.5l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.2z"/>
-      <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.3-7.7 2.3-6.3 0-11.6-4.2-13.6-10l-7.8 6C6.6 42.5 14.6 48 24 48z"/>
-    </svg>
-  )
-}
-
-// ── 과별 랭킹 아이템 ────────────────────────────────────
-function DeptRankItem({ rank, dept, isMyDept }: { rank: number; dept: DeptRank; isMyDept: boolean }) {
-  const maxBar = 100
-  const emoji  = DEPT_EMOJI[dept.department] ?? '🎵'
-  return (
-    <div className={`rounded-2xl border-2 px-4 py-3.5 ${isMyDept ? 'border-rb-400 bg-rb-50' : 'border-gray-100 bg-white'}`}>
-      <div className="flex items-center gap-3 mb-2">
-        <span className={`text-sm font-bold w-6 text-center ${rank <= 3 ? 'text-rb-600' : 'text-gray-400'}`}>
-          {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}`}
-        </span>
-        <span className="text-lg">{emoji}</span>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <span className={`text-sm font-bold ${isMyDept ? 'text-rb-700' : 'text-gray-900'}`}>
-              {dept.department}
-              {isMyDept && <span className="ml-1 text-[10px] text-rb-500 font-medium">내 과</span>}
-            </span>
-            <span className="text-sm font-bold text-gray-800">{minToHM(dept.avgMin)}</span>
-          </div>
-          <div className="text-xs text-gray-400 mt-0.5">
-            평균 연습시간 · {dept.userCount}명 · {dept.sessionCount}세션
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── 개인 랭킹 아이템 ────────────────────────────────────
-function UserRankItem({ rank, user, isMe }: { rank: number; user: UserRank; isMe: boolean }) {
-  const emoji = DEPT_EMOJI[user.department ?? '미설정'] ?? '🎵'
-  return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${isMe ? 'border-rb-400 bg-rb-50' : 'border-gray-100 bg-white'}`}>
-      <span className={`text-sm font-bold w-6 text-center ${rank <= 3 ? 'text-rb-600' : 'text-gray-400'}`}>
-        {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}`}
-      </span>
-      <span className="text-base">{emoji}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-bold truncate ${isMe ? 'text-rb-700' : 'text-gray-900'}`}>
-            {user.nickname ?? '익명'}
-          </span>
-          {isMe && <span className="text-[10px] text-rb-500 font-medium shrink-0">나</span>}
-        </div>
-        <span className="text-xs text-gray-400">{user.department ?? '미설정'} · {user.sessionCount}세션</span>
-      </div>
-      <span className="text-sm font-bold text-gray-800 shrink-0">{minToHM(user.totalMin)}</span>
-    </div>
-  )
-}
-
 // ── 수동 연습 기록 모달 ──────────────────────────────────
-function ManualLogModal({
-  onClose,
-  onSave,
-}: {
+function ManualLogModal({ onClose, onSave }: {
   onClose: () => void
   onSave: (startedAt: Date, endedAt: Date, room: string) => Promise<void>
 }) {
-  const now      = new Date()
-  const pad      = (n: number) => n.toString().padStart(2, '0')
-  const toHHMM   = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  const fromHHMM = (s: string, base: Date) => {
+  const now    = new Date()
+  const pad    = (n: number) => n.toString().padStart(2, '0')
+  const toHHMM = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const fromHHMM = (s: string) => {
     const [h, m] = s.split(':').map(Number)
-    const d = new Date(base)
-    d.setHours(h, m, 0, 0)
-    return d
+    const d = new Date(now); d.setHours(h, m, 0, 0); return d
   }
-
   const [startStr, setStartStr] = useState(toHHMM(new Date(now.getTime() - 60 * 60 * 1000)))
   const [endStr,   setEndStr]   = useState(toHHMM(now))
   const [room,     setRoom]     = useState('')
@@ -203,14 +110,13 @@ function ManualLogModal({
   const [err,      setErr]      = useState('')
 
   async function handleSave() {
-    const startedAt = fromHHMM(startStr, now)
-    const endedAt   = fromHHMM(endStr, now)
+    const startedAt = fromHHMM(startStr), endedAt = fromHHMM(endStr)
     if (endedAt <= startedAt) { setErr('종료 시각이 시작 시각보다 늦어야 해요'); return }
     const dMin = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)
-    if (dMin < 5)   { setErr('최소 5분 이상이어야 해요'); return }
+    if (dMin < 5) { setErr('최소 5분 이상이어야 해요'); return }
     if (dMin > 240) { setErr('4시간 이내만 입력 가능해요'); return }
     setSaving(true)
-    try { await onSave(startedAt, endedAt, room) } catch (e) { setErr('저장 실패. 다시 시도해주세요') }
+    try { await onSave(startedAt, endedAt, room) } catch { setErr('저장 실패. 다시 시도해주세요') }
     setSaving(false)
   }
 
@@ -221,7 +127,6 @@ function ManualLogModal({
         <div className="w-full max-w-md bg-white rounded-t-3xl px-6 pt-5 pb-10 shadow-2xl">
           <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
           <h2 className="text-lg font-bold text-gray-900 mb-5">🎵 연습 기록 직접 입력</h2>
-
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -253,32 +158,53 @@ function ManualLogModal({
   )
 }
 
+function BackIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M12 5l-7 7 7 7" />
+    </svg>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 48 48">
+      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.6 0 6.6 5.5 2.6 13.5l7.8 6C12.3 13.2 17.7 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17z"/>
+      <path fill="#FBBC05" d="M10.4 28.5A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.1.8-4.5l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.2z"/>
+      <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.3-7.7 2.3-6.3 0-11.6-4.2-13.6-10l-7.8 6C6.6 42.5 14.6 48 24 48z"/>
+    </svg>
+  )
+}
+
 // ── 메인 페이지 ────────────────────────────────────────
 export default function MyPage() {
   const { user, linkGoogle, restoreWithGoogle, isLinked, linkedEmail } = useAnonymousAuth()
   const { profile, isNew, suggestedNickname, rerollNickname, saveProfile, saveNotifySettings } = useUserProfile(user)
 
   const [period,      setPeriod]      = useState<Period>('weekly')
-  const [tab,         setTab]         = useState<'dept' | 'user'>('user')
-  const [data,        setData]        = useState<RankingsData | null>(null)
+  const [myData,      setMyData]      = useState<RankingsData['myRank'] | null>(null)
   const [loading,     setLoading]     = useState(true)
   const [showLog,     setShowLog]     = useState(false)
   const [logDone,     setLogDone]     = useState(false)
   const [googleState, setGoogleState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [showEdit,    setShowEdit]    = useState(false)
 
-  const fetchRankings = useCallback(async () => {
+  const fetchMyStats = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
-      const res  = await fetch(`/api/rankings?period=${period}&uid=${user.uid}`)
-      if (res.ok) setData(await res.json())
+      const res = await fetch(`/api/rankings?period=${period}&uid=${user.uid}`)
+      if (res.ok) {
+        const data: RankingsData = await res.json()
+        setMyData(data.myRank ?? null)
+      }
     } finally {
       setLoading(false)
     }
   }, [user, period])
 
-  useEffect(() => { fetchRankings() }, [fetchRankings])
+  useEffect(() => { fetchMyStats() }, [fetchMyStats])
 
   async function handleLinkGoogle() {
     setGoogleState('loading')
@@ -307,12 +233,8 @@ export default function MyPage() {
     if (!res.ok) throw new Error('failed')
     setShowLog(false)
     setLogDone(true)
-    fetchRankings()
+    fetchMyStats()
   }
-
-  const myProfile = data?.myRank
-  const myUser    = myProfile?.user
-  const myDept    = myProfile?.dept
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
@@ -323,11 +245,10 @@ export default function MyPage() {
           <Link href="/" className="text-white/70 p-1 -ml-1"><BackIcon /></Link>
           <div>
             <h1 className="text-xl font-bold text-white">마이페이지</h1>
-            <p className="text-rb-200 text-xs mt-0.5">연습 기록</p>
+            <p className="text-rb-200 text-xs mt-0.5">프로필 · 연습 통계</p>
           </div>
         </div>
 
-        {/* 프로필 카드 */}
         {profile ? (
           <div className="rounded-2xl bg-white/10 px-4 py-3.5 flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl">
@@ -336,34 +257,71 @@ export default function MyPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-white font-bold text-base">{profile.nickname}</p>
-                <button
-                  onClick={() => setShowEdit(true)}
-                  className="text-rb-300 text-[11px] font-medium border border-rb-400 rounded-md px-1.5 py-0.5 active:opacity-70 transition-opacity"
-                >
+                <button onClick={() => setShowEdit(true)}
+                  className="text-rb-300 text-[11px] font-medium border border-rb-400 rounded-md px-1.5 py-0.5 active:opacity-70 transition-opacity">
                   편집
                 </button>
               </div>
               <p className="text-rb-200 text-xs">{profile.department ?? '학과 미설정'}</p>
             </div>
-            {/* 내 주간 연습시간 */}
-            {myUser && (
+            {myData?.user && (
               <div className="text-right">
-                <p className="text-white font-bold text-lg">{minToHM(myUser.totalMin)}</p>
-                <p className="text-rb-200 text-xs">
-                  {PERIOD_LABELS[period]} 연습
-                  {myProfile?.userRankPos ? ` · ${myProfile.userRankPos}위` : ''}
-                </p>
+                <p className="text-white font-bold text-lg">{minToHM(myData.user.totalMin)}</p>
+                <p className="text-rb-200 text-xs">{PERIOD_LABELS[period]} · {myData.user.sessionCount}세션</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="rounded-2xl bg-white/10 px-4 py-3 text-rb-200 text-sm">
-            로딩 중...
-          </div>
+          <div className="rounded-2xl bg-white/10 px-4 py-3 text-rb-200 text-sm">로딩 중...</div>
         )}
       </header>
 
       <main className="flex-1 px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+90px)] space-y-5">
+
+        {/* ── 기간 탭 ── */}
+        <div className="flex gap-2">
+          {(['daily', 'weekly', 'monthly'] as Period[]).map((p) => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
+                period === p ? 'bg-rb-600 text-white' : 'bg-rb-50 text-rb-600'
+              }`}>
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+
+        {/* ── 내 연습 통계 ── */}
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-6 h-6 border-2 border-rb-200 border-t-rb-600 rounded-full animate-spin" />
+          </div>
+        ) : myData?.user ? (
+          <div className="rounded-2xl bg-rb-50 border-2 border-rb-100 px-5 py-4 space-y-3">
+            <p className="text-xs font-bold text-rb-600 uppercase tracking-wider">{PERIOD_LABELS[period]} 연습 기록</p>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-3xl font-bold text-rb-700">{minToHM(myData.user.totalMin)}</p>
+                <p className="text-xs text-rb-500 mt-1">총 연습시간</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-rb-600">{myData.user.sessionCount}세션</p>
+                <p className="text-xs text-rb-400">연습 횟수</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center py-10 gap-3">
+            <p className="text-3xl">🎵</p>
+            <p className="text-gray-400 text-sm">아직 기록이 없어요</p>
+            <p className="text-xs text-gray-300 text-center">알림 등록 후 연습하거나 아래 버튼으로 직접 기록해보세요</p>
+          </div>
+        )}
+
+        {logDone && (
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3">
+            <p className="text-sm font-bold text-emerald-800">✅ 연습 기록이 저장됐어요!</p>
+          </div>
+        )}
 
         {/* ── Google 계정 연결 카드 ── */}
         {isLinked ? (
@@ -388,20 +346,12 @@ export default function MyPage() {
               <p className="text-xs text-red-500 font-medium">연결에 실패했어요. 다시 시도해 주세요.</p>
             )}
             <div className="flex gap-2">
-              <button
-                onClick={handleLinkGoogle}
-                disabled={googleState === 'loading'}
-                className="flex-1 h-10 rounded-xl bg-white border-2 border-gray-200 text-sm font-bold text-gray-700 disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-              >
-                {googleState === 'loading' ? '연결 중...' : (
-                  <><GoogleIcon />Google 연결</>
-                )}
+              <button onClick={handleLinkGoogle} disabled={googleState === 'loading'}
+                className="flex-1 h-10 rounded-xl bg-white border-2 border-gray-200 text-sm font-bold text-gray-700 disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+                {googleState === 'loading' ? '연결 중...' : <><GoogleIcon />Google 연결</>}
               </button>
-              <button
-                onClick={handleRestoreGoogle}
-                disabled={googleState === 'loading'}
-                className="flex-1 h-10 rounded-xl bg-white border-2 border-gray-200 text-sm font-bold text-gray-500 disabled:opacity-40 active:scale-[0.98] transition-all"
-              >
+              <button onClick={handleRestoreGoogle} disabled={googleState === 'loading'}
+                className="flex-1 h-10 rounded-xl bg-white border-2 border-gray-200 text-sm font-bold text-gray-500 disabled:opacity-40 active:scale-[0.98] transition-all">
                 계정 복원
               </button>
             </div>
@@ -426,8 +376,7 @@ export default function MyPage() {
                   onClick={() => saveNotifySettings({ [key]: !profile[key as keyof typeof profile] })}
                   className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors overflow-hidden ${
                     profile[key as keyof typeof profile] ? 'bg-rb-600' : 'bg-gray-300'
-                  }`}
-                >
+                  }`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
                     profile[key as keyof typeof profile] ? 'translate-x-5' : 'translate-x-0'
                   }`} />
@@ -437,140 +386,26 @@ export default function MyPage() {
           </div>
         )}
 
-        {/* ── 기간 탭 ── */}
-        <div className="flex gap-2">
-          {(['daily', 'weekly', 'monthly'] as Period[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-                period === p ? 'bg-rb-600 text-white' : 'bg-rb-50 text-rb-600'
-              }`}
-            >
-              {PERIOD_LABELS[p]}
-            </button>
-          ))}
-        </div>
-
-        {/* ── 내 과 순위 카드 ── */}
-        {myDept && (
-          <div className="rounded-2xl bg-rb-50 border-2 border-rb-200 px-4 py-3.5">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-bold text-rb-600 uppercase tracking-wider">내 과 ({myDept.department})</p>
-              <span className="text-xs text-rb-500">
-                {data!.deptRankings.findIndex((d) => d.department === myDept.department) + 1}위 / {data!.deptRankings.length}개 과
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-rb-700">{minToHM(myDept.avgMin)}</p>
-                <p className="text-xs text-rb-500">평균 연습시간</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-rb-600">{minToHM(myDept.totalMin)}</p>
-                <p className="text-xs text-rb-400">총 {myDept.userCount}명 · {myDept.sessionCount}세션</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── 연습 기록 ── */}
-        <div className="flex items-center gap-2">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">🏆 이번 주 연습</p>
-          <div className="h-px flex-1 bg-gray-100" />
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-rb-200 border-t-rb-600 rounded-full animate-spin" />
-          </div>
-        ) : !data || (tab === 'dept' ? data.deptRankings.length : data.userRankings.length) === 0 ? (
-          <div className="flex flex-col items-center py-12 gap-3">
-            <p className="text-3xl">🎵</p>
-            <p className="text-gray-400 text-sm">아직 기록이 없어요</p>
-            <p className="text-xs text-gray-300 text-center">
-              알림 등록 후 연습하거나 아래 버튼으로 직접 기록해보세요
-            </p>
-          </div>
-        ) : tab === 'dept' ? (
-          /* 과별 랭킹 */
-          <div className="space-y-2">
-            {data.deptRankings.map((dept, i) => (
-              <DeptRankItem
-                key={dept.department}
-                rank={i + 1}
-                dept={dept}
-                isMyDept={dept.department === profile?.department}
-              />
-            ))}
-            <p className="text-center text-xs text-gray-300 pt-1">
-              과별 평균 연습시간 기준 · {PERIOD_LABELS[period]}
-            </p>
-          </div>
-        ) : (
-          /* 개인 랭킹 */
-          <div className="space-y-2">
-            {data.userRankings.map((u, i) => (
-              <UserRankItem
-                key={u.uid}
-                rank={i + 1}
-                user={u}
-                isMe={u.uid === user?.uid}
-              />
-            ))}
-            {/* 내가 20위 밖이면 별도 표시 */}
-            {myProfile?.userRankPos &&
-              myProfile.userRankPos > 20 &&
-              myProfile.user && (
-              <div className="rounded-2xl border-2 border-dashed border-rb-300 px-4 py-3">
-                <p className="text-xs text-rb-500 font-bold mb-1">내 순위</p>
-                <UserRankItem rank={myProfile.userRankPos} user={myProfile.user} isMe={true} />
-              </div>
-            )}
-            <p className="text-center text-xs text-gray-300 pt-1">
-              개인 총 연습시간 기준 · {PERIOD_LABELS[period]} · 상위 20명
-            </p>
-          </div>
-        )}
-
-        {logDone && (
-          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3">
-            <p className="text-sm font-bold text-emerald-800">✅ 연습 기록이 저장됐어요!</p>
-            <p className="text-xs text-emerald-600 mt-0.5">랭킹에 반영되기까지 잠시 걸릴 수 있어요</p>
-          </div>
-        )}
-
       </main>
 
       {/* ── 하단 버튼 ── */}
       <div className="fixed bottom-0 left-0 right-0 flex justify-center z-10">
         <div className="w-full max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 bg-white border-t border-gray-100">
-          <button
-            onClick={() => { setShowLog(true); setLogDone(false) }}
-            className="w-full h-13 rounded-2xl bg-rb-600 text-white text-sm font-bold active:scale-[0.98] transition-all shadow-md"
-          >
+          <button onClick={() => { setShowLog(true); setLogDone(false) }}
+            className="w-full h-13 rounded-2xl bg-rb-600 text-white text-sm font-bold active:scale-[0.98] transition-all shadow-md">
             ✏️ 연습 기록 직접 입력
           </button>
           <p className="text-center text-xs text-gray-400 mt-1.5">알림 등록 시 연습 기록이 자동으로 쌓여요</p>
         </div>
       </div>
 
-      {/* ── 수동 기록 모달 ── */}
-      {showLog && (
-        <ManualLogModal onClose={() => setShowLog(false)} onSave={handleManualLog} />
-      )}
+      {showLog && <ManualLogModal onClose={() => setShowLog(false)} onSave={handleManualLog} />}
 
-      {/* ── 프로필 편집 ── */}
       {showEdit && profile && (
-        <EditProfileSheet
-          initialNickname={profile.nickname}
-          initialDept={profile.department}
-          onClose={() => setShowEdit(false)}
-          onSave={saveProfile}
-        />
+        <EditProfileSheet initialNickname={profile.nickname} initialDept={profile.department}
+          onClose={() => setShowEdit(false)} onSave={saveProfile} />
       )}
 
-      {/* ── 온보딩 ── */}
       {isNew && suggestedNickname && (
         <OnboardingModal suggestedNickname={suggestedNickname} onReroll={rerollNickname} onSave={saveProfile} />
       )}
