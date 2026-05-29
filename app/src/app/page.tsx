@@ -150,8 +150,12 @@ export default function HomePage() {
     setUrgentItems(allUrgentItems.filter((r) => r.createdAt.toMillis() > now - 10 * 60 * 1000))
   }, [allUrgentItems, now])
 
-  const updatedAt  = status?.updated_at
-    ? new Date(status.updated_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const updatedAt = status?.updated_at
+    ? (() => {
+        const s = status.updated_at
+        const iso = s.endsWith('Z') || s.includes('+') ? s : s + 'Z'
+        return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+      })()
     : null
   const floorData  = byFloor[activeFloor] ?? {}
   const corners    = Object.keys(floorData).map(Number).sort((a, b) => a - b)
