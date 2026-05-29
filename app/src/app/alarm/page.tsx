@@ -1,13 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { collection, addDoc, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore'
 import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useFcmToken } from '@/hooks/useFcmToken'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { COLLECTIONS } from '@/types/collections'
+
+interface ActiveSession {
+  reservedAt: Date
+  endTime: Date | null
+  roomHint: string | null
+  notified5: boolean
+  notified1: boolean
+  notifiedReturn40: boolean
+  notifiedReturn10: boolean
+}
 
 type ReservedMode = 'now' | 'manual'
 type EndMode = 'none' | 'plus1h' | 'plus2h' | 'custom'
@@ -44,27 +54,48 @@ function NotifyRow({ enabled, label, desc }: { enabled: boolean; label: string; 
   )
 }
 
+function relativeMin(target: Date, nowMs: number): string {
+  const diff = Math.round((target.getTime() - nowMs) / 60000)
+  if (diff <= 0) return '발송됨'
+  if (diff < 60) return `${diff}분 후`
+  return `${Math.floor(diff / 60)}시간 ${diff % 60}분 후`
+}
+
 // ─── 타이머 화면 ──────────────────────────────────────────────
-function TimerScreen({ reservedAt, endTime, roomHint, notifyTag, notifyExtend, notifyReturn }: {
+function TimerScreen({ reservedAt, endTime, roomHint, notifyTag, notifyExtend, notifyReturn,
+  notified5, notified1, notifiedReturn40, notifiedReturn10 }: {
   reservedAt: Date
   endTime: Date | null
   roomHint: string
   notifyTag: boolean
   notifyExtend: boolean
   notifyReturn: boolean
+  notified5: boolean
+  notified1: boolean
+  notifiedReturn40: boolean
+  notifiedReturn10: boolean
 }) {
   const deadline = new Date(reservedAt.getTime() + 10 * 60 * 1000)
+  const [now, setNow] = useState(Date.now())
   const [countdown, setCountdown] = useState(formatCountdown(deadline.getTime() - Date.now()))
   const [expired, setExpired] = useState(deadline.getTime() <= Date.now())
 
   useEffect(() => {
     const id = setInterval(() => {
-      const remaining = deadline.getTime() - Date.now()
+      const ms = Date.now()
+      setNow(ms)
+      const remaining = deadline.getTime() - ms
       setCountdown(formatCountdown(remaining))
       setExpired(remaining <= 0)
     }, 1000)
     return () => clearInterval(id)
   }, [deadline])
+
+  // 알림 예정 시각
+  const t5  = new Date(reservedAt.getTime() + 5 * 60 * 1000)
+  const t8  = new Date(reservedAt.getTime() + 8 * 60 * 1000)
+  const r40 = endTime ? new Date(endTime.getTime() - 40 * 60 * 1000) : null
+  const r10 = endTime ? new Date(endTime.getTime() - 10 * 60 * 1000) : null
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
@@ -103,24 +134,30 @@ function TimerScreen({ reservedAt, endTime, roomHint, notifyTag, notifyExtend, n
           <NotifyRow
             enabled={notifyTag}
             label="태그 알림"
-            desc="슬롯 시작 5분 후 · 2분 전"
+            desc={notifyTag
+              ? `${toHHMM(t5)} (${notified5 ? '✓발송' : relativeMin(t5, now)}) · ${toHHMM(t8)} (${notified1 ? '✓발송' : relativeMin(t8, now)})`
+              : '꺼짐'}
           />
 
           {/* 연장 리마인더 */}
-          {endTime && (
+          {endTime && r40 && (
             <NotifyRow
               enabled={notifyExtend}
               label="연장 리마인더"
-              desc={`${toHHMM(new Date(endTime.getTime() - 40 * 60 * 1000))} — 연장 여부 결정`}
+              desc={notifyExtend
+                ? `${toHHMM(r40)} (${notifiedReturn40 ? '✓발송' : relativeMin(r40, now)})`
+                : '꺼짐'}
             />
           )}
 
           {/* 반납 리마인더 */}
-          {endTime && (
+          {endTime && r10 && (
             <NotifyRow
               enabled={notifyReturn}
               label="반납 리마인더"
-              desc={`${toHHMM(new Date(endTime.getTime() - 10 * 60 * 1000))} — 10분 전 반납 알림`}
+              desc={notifyReturn
+                ? `${toHHMM(r10)} (${notifiedReturn10 ? '✓발송' : relativeMin(r10, now)})`
+                : '꺼짐'}
             />
           )}
         </div>
@@ -150,17 +187,43 @@ export default function AlarmPage() {
   const [endMode, setEndMode] = useState<EndMode>('plus2h')
   const [endTimeInput, setEndTimeInput] = useState('')
   const [roomHint, setRoomHint] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [step, setStep] = useState<Step>('form')
-  const [reservedAt, setReservedAt] = useState<Date | null>(null)
-  const [endTime, setEndTime] = useState<Date | null>(null)
+  const [submitting,     setSubmitting]     = useState(false)
+  const [error,          setError]          = useState('')
+  const [step,           setStep]           = useState<Step>('form')
+  const [reservedAt,     setReservedAt]     = useState<Date | null>(null)
+  const [endTime,        setEndTime]        = useState<Date | null>(null)
+  const [activeSession,  setActiveSession]  = useState<ActiveSession | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(true)
 
   useEffect(() => {
     const now = new Date()
     setReservedTimeInput(toHHMM(now))
     setEndTimeInput(toHHMM(new Date(now.getTime() + 2 * 60 * 60 * 1000)))
   }, [])
+
+  // 기존 활성 세션 조회
+  useEffect(() => {
+    if (!user) return
+    getDocs(query(
+      collection(db, COLLECTIONS.ALARM_SESSIONS),
+      where('userId', '==', user.uid),
+      where('status', '==', 'active'),
+    )).then(snap => {
+      if (!snap.empty) {
+        const d = snap.docs[0].data()
+        setActiveSession({
+          reservedAt:        (d.reservedAt as Timestamp).toDate(),
+          endTime:           d.endTime ? (d.endTime as Timestamp).toDate() : null,
+          roomHint:          d.roomHint ?? null,
+          notified5:         d.notified5,
+          notified1:         d.notified1,
+          notifiedReturn40:  d.notifiedReturn40,
+          notifiedReturn10:  d.notifiedReturn10,
+        })
+      }
+      setSessionLoading(false)
+    }).catch(() => setSessionLoading(false))
+  }, [user])
 
   // 키오스크 10분 슬롯 기준으로 올림 (14:14 → 14:20)
   function snapToSlotStart(d: Date): Date {
@@ -257,6 +320,7 @@ export default function AlarmPage() {
     }
   }
 
+  // 방금 등록한 세션
   if (step === 'timer' && reservedAt) {
     return (
       <TimerScreen
@@ -266,7 +330,44 @@ export default function AlarmPage() {
         notifyTag={profile?.notifyTag !== false}
         notifyExtend={profile?.notifyExtend !== false}
         notifyReturn={profile?.notifyReturn !== false}
+        notified5={false} notified1={false}
+        notifiedReturn40={false} notifiedReturn10={false}
       />
+    )
+  }
+
+  // 기존 활성 세션이 있으면 타이머 화면으로 바로 이동
+  if (!sessionLoading && activeSession) {
+    return (
+      <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
+        <header className="bg-rb-600 px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-5 flex items-center gap-3">
+          <Link href="/" className="text-white/70 p-1 -ml-1"><BackIcon /></Link>
+          <div>
+            <h1 className="text-xl font-bold text-white">등록된 알림</h1>
+            <p className="text-rb-200 text-xs mt-0.5">활성 알림 세션</p>
+          </div>
+        </header>
+        <TimerScreen
+          reservedAt={activeSession.reservedAt}
+          endTime={activeSession.endTime}
+          roomHint={activeSession.roomHint ?? ''}
+          notifyTag={profile?.notifyTag !== false}
+          notifyExtend={profile?.notifyExtend !== false}
+          notifyReturn={profile?.notifyReturn !== false}
+          notified5={activeSession.notified5}
+          notified1={activeSession.notified1}
+          notifiedReturn40={activeSession.notifiedReturn40}
+          notifiedReturn10={activeSession.notifiedReturn10}
+        />
+        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+          <button
+            onClick={() => setActiveSession(null)}
+            className="w-full h-12 rounded-2xl bg-gray-100 text-gray-500 text-sm font-bold active:scale-[0.98] transition-all"
+          >
+            새 알림 등록하기
+          </button>
+        </div>
+      </div>
     )
   }
 

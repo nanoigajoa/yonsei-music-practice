@@ -120,7 +120,6 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
             ))
 
         # 현재 슬롯: 키오스크 PAST 마커 기준 (서버 타임존 독립)
-        # 마지막 PAST 슬롯 다음이 현재 슬롯
         sorted_idxs = sorted(slots)
         current_idx: Optional[int] = None
         current_status = S.PAST
@@ -133,8 +132,20 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
         occupied = current_status == S.BOOKED
         occupied_until: Optional[str] = None
 
+        # 반납 직전 handover 감지:
+        # 이전 슬롯이 BOOKED였는데 현재 슬롯이 AVAILABLE로 바뀐 경우
+        # → 키오스크가 다음 예약을 허용하지만 실제 방은 아직 사용 중
+        if current_idx is not None and current_status == S.AVAILABLE:
+            prev_booked = [i for i in sorted_idxs if i < current_idx and slots[i] == S.BOOKED]
+            if prev_booked:
+                occupied = True
+                occupied_until = (_slot_to_dt(current_idx) + timedelta(minutes=SLOT_MINUTES)).strftime("%H:%M")
+                # 현재 슬롯을 available_periods에서 제거 (아직 사용 중)
+                current_slot_time = _slot_to_dt(current_idx).strftime("%H:%M")
+                available_periods = [p for p in available_periods if p.start != current_slot_time]
+
         # 사용중이면 현재 슬롯 이후 첫 번째 비BOOKED 슬롯이 반납 시각
-        if occupied and current_idx is not None:
+        if occupied and occupied_until is None and current_idx is not None:
             for idx in sorted_idxs:
                 if idx > current_idx and slots[idx] != S.BOOKED:
                     occupied_until = _slot_to_dt(idx).strftime("%H:%M")
