@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useFcmToken } from '@/hooks/useFcmToken'
+import { useUserProfile } from '@/hooks/useUserProfile'
 import { COLLECTIONS } from '@/types/collections'
 
 type ReservedMode = 'now' | 'manual'
@@ -28,11 +29,29 @@ function BackIcon() {
   )
 }
 
+function NotifyRow({ enabled, label, desc }: { enabled: boolean; label: string; desc: string }) {
+  return (
+    <div className={`flex items-start gap-3 ${enabled ? '' : 'opacity-40'}`}>
+      <span className="mt-0.5 text-base">{enabled ? '🔔' : '🔕'}</span>
+      <div className="flex-1">
+        <p className={`text-sm font-bold ${enabled ? 'text-gray-900' : 'text-gray-400'}`}>
+          {label}
+          {!enabled && <span className="ml-1.5 text-[10px] font-medium text-gray-400">꺼짐</span>}
+        </p>
+        <p className={`text-sm ${enabled ? 'text-gray-500' : 'text-gray-300'}`}>{desc}</p>
+      </div>
+    </div>
+  )
+}
+
 // ─── 타이머 화면 ──────────────────────────────────────────────
-function TimerScreen({ reservedAt, endTime, roomHint }: {
+function TimerScreen({ reservedAt, endTime, roomHint, notifyTag, notifyExtend, notifyReturn }: {
   reservedAt: Date
   endTime: Date | null
   roomHint: string
+  notifyTag: boolean
+  notifyExtend: boolean
+  notifyReturn: boolean
 }) {
   const deadline = new Date(reservedAt.getTime() + 10 * 60 * 1000)
   const [countdown, setCountdown] = useState(formatCountdown(deadline.getTime() - Date.now()))
@@ -73,35 +92,36 @@ function TimerScreen({ reservedAt, endTime, roomHint }: {
 
         {/* 등록된 알림 요약 */}
         <div className="w-full rounded-2xl bg-rb-50 border border-rb-100 px-5 py-4 space-y-3">
-          <p className="text-xs font-bold text-rb-600 uppercase tracking-wider">등록된 알림</p>
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-base">🔔</span>
-            <div>
-              <p className="text-sm font-bold text-gray-900">태그 알림</p>
-              <p className="text-sm text-gray-500">예약 5분 후 · 1분 전</p>
-            </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-rb-600 uppercase tracking-wider">알림 설정</p>
+            <Link href="/mypage" className="text-[11px] text-rb-400 underline underline-offset-2">
+              설정 변경
+            </Link>
           </div>
+
+          {/* 태그 알림 */}
+          <NotifyRow
+            enabled={notifyTag}
+            label="태그 알림"
+            desc="슬롯 시작 5분 후 · 2분 전"
+          />
+
+          {/* 연장 리마인더 */}
           {endTime && (
-            <>
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 text-base">🔔</span>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">연장 리마인더</p>
-                  <p className="text-sm text-gray-500">
-                    {toHHMM(new Date(endTime.getTime() - 40 * 60 * 1000))} — 연장 여부 결정
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 text-base">🔔</span>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">반납 리마인더</p>
-                  <p className="text-sm text-gray-500">
-                    {toHHMM(new Date(endTime.getTime() - 10 * 60 * 1000))} — 10분 전 반납 알림
-                  </p>
-                </div>
-              </div>
-            </>
+            <NotifyRow
+              enabled={notifyExtend}
+              label="연장 리마인더"
+              desc={`${toHHMM(new Date(endTime.getTime() - 40 * 60 * 1000))} — 연장 여부 결정`}
+            />
+          )}
+
+          {/* 반납 리마인더 */}
+          {endTime && (
+            <NotifyRow
+              enabled={notifyReturn}
+              label="반납 리마인더"
+              desc={`${toHHMM(new Date(endTime.getTime() - 10 * 60 * 1000))} — 10분 전 반납 알림`}
+            />
           )}
         </div>
 
@@ -123,6 +143,7 @@ function TimerScreen({ reservedAt, endTime, roomHint }: {
 export default function AlarmPage() {
   const { user } = useAnonymousAuth()
   const { permission, requestAndRegister } = useFcmToken(user)
+  const { profile } = useUserProfile(user)
 
   const [reservedMode, setReservedMode] = useState<ReservedMode>('now')
   const [reservedTimeInput, setReservedTimeInput] = useState('')
@@ -237,7 +258,16 @@ export default function AlarmPage() {
   }
 
   if (step === 'timer' && reservedAt) {
-    return <TimerScreen reservedAt={reservedAt} endTime={endTime} roomHint={roomHint} />
+    return (
+      <TimerScreen
+        reservedAt={reservedAt}
+        endTime={endTime}
+        roomHint={roomHint}
+        notifyTag={profile?.notifyTag !== false}
+        notifyExtend={profile?.notifyExtend !== false}
+        notifyReturn={profile?.notifyReturn !== false}
+      />
+    )
   }
 
   const endButtons: { mode: EndMode; label: string }[] = [
@@ -341,6 +371,30 @@ export default function AlarmPage() {
           <p className="text-sm font-bold text-amber-800">⚠️ 예약 후 10분 내 태그 필수</p>
           <p className="text-xs text-amber-600 mt-1">미태그 시 패널티 (2회→3일, 3회→7주 이용 불가)</p>
         </div>
+
+        {/* 현재 알림 설정 미리보기 */}
+        {profile && (
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-gray-500">현재 알림 설정</p>
+              <Link href="/mypage" className="text-[11px] text-rb-500 underline underline-offset-2">변경</Link>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {[
+                { key: 'notifyTag',    label: '태그 알림' },
+                { key: 'notifyExtend', label: '연장' },
+                { key: 'notifyReturn', label: '반납' },
+              ].map(({ key, label }) => {
+                const on = profile[key as keyof typeof profile] !== false
+                return (
+                  <span key={key} className={`text-xs font-bold px-2 py-1 rounded-lg ${on ? 'bg-rb-100 text-rb-700' : 'bg-gray-100 text-gray-400 line-through'}`}>
+                    {on ? '🔔' : '🔕'} {label}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
