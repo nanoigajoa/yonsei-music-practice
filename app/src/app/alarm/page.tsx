@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { collection, addDoc, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { collection, addDoc, getDocs, doc, updateDoc, query, where, serverTimestamp, Timestamp } from 'firebase/firestore'
 import Link from 'next/link'
 import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
@@ -10,6 +10,7 @@ import { useUserProfile } from '@/hooks/useUserProfile'
 import { COLLECTIONS } from '@/types/collections'
 
 interface ActiveSession {
+  id: string
   reservedAt: Date
   endTime: Date | null
   roomHint: string | null
@@ -210,8 +211,10 @@ export default function AlarmPage() {
       where('status', '==', 'active'),
     )).then(snap => {
       if (!snap.empty) {
-        const d = snap.docs[0].data()
+        const docSnap = snap.docs[0]
+        const d = docSnap.data()
         setActiveSession({
+          id:                docSnap.id,
           reservedAt:        (d.reservedAt as Timestamp).toDate(),
           endTime:           d.endTime ? (d.endTime as Timestamp).toDate() : null,
           roomHint:          d.roomHint ?? null,
@@ -309,6 +312,18 @@ export default function AlarmPage() {
         status:            'active',
         createdAt:         serverTimestamp(),
       })
+
+      // 즉시 확인 알림 발송
+      const idToken = await user.getIdToken()
+      fetch('/api/alarm/notify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body:    JSON.stringify({
+          title: '✅ 알림 등록 완료',
+          body:  `${toHHMM(resolved)} 슬롯 태그 알림이 등록됐어요${resolvedEnd ? ` · 반납 ${toHHMM(resolvedEnd)}` : ''}`,
+        }),
+      }).catch(() => {/* 즉시 알림 실패는 무시 */})
+
       setReservedAt(resolved)
       setEndTime(resolvedEnd)
       setStep('timer')
@@ -410,6 +425,18 @@ export default function AlarmPage() {
               ) : (
                 <p className="text-xs text-rb-400">남은 예정 알림 없음</p>
               )}
+
+              {/* 취소 버튼 */}
+              <button
+                onClick={async () => {
+                  if (!activeSession) return
+                  await updateDoc(doc(db, COLLECTIONS.ALARM_SESSIONS, activeSession.id), { status: 'cancelled' })
+                  setActiveSession(null)
+                }}
+                className="w-full h-9 rounded-xl bg-white border border-rb-200 text-rb-600 text-xs font-bold active:scale-[0.98] transition-all mt-1"
+              >
+                알림 취소
+              </button>
             </div>
           )
         })()}
