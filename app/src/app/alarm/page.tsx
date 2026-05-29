@@ -141,15 +141,31 @@ export default function AlarmPage() {
     setEndTimeInput(toHHMM(new Date(now.getTime() + 2 * 60 * 60 * 1000)))
   }, [])
 
+  // 키오스크 10분 슬롯 기준으로 올림 (14:14 → 14:20)
+  function snapToSlotStart(d: Date): Date {
+    const total = d.getHours() * 60 + d.getMinutes()
+    const snapped = Math.ceil(total / 10) * 10
+    const result = new Date(d)
+    result.setHours(Math.floor(snapped / 60), snapped % 60, 0, 0)
+    return result
+  }
+
   function resolveReservedAt(): Date | null {
-    if (reservedMode === 'now') return new Date()
-    if (!reservedTimeInput) return null
-    const [h, m] = reservedTimeInput.split(':').map(Number)
-    const d = new Date()
-    d.setHours(h, m, 0, 0)
-    if (d.getTime() > Date.now() + 60_000) d.setDate(d.getDate() - 1)
-    if (Date.now() - d.getTime() > 9 * 60 * 1000) return null
-    return d
+    let raw: Date
+    if (reservedMode === 'now') {
+      raw = new Date()
+    } else {
+      if (!reservedTimeInput) return null
+      const [h, m] = reservedTimeInput.split(':').map(Number)
+      raw = new Date()
+      raw.setHours(h, m, 0, 0)
+      if (raw.getTime() > Date.now() + 60_000) raw.setDate(raw.getDate() - 1)
+    }
+    const slotStart = snapToSlotStart(raw)
+    const slotEnd = new Date(slotStart.getTime() + 10 * 60 * 1000)
+    // 슬롯이 이미 종료됐으면 거부
+    if (slotEnd.getTime() <= Date.now()) return null
+    return slotStart
   }
 
   function resolveEndTime(base: Date): Date | null {
@@ -179,7 +195,7 @@ export default function AlarmPage() {
     if (!user) return
     const resolved = resolveReservedAt()
     if (!resolved) {
-      setError('예약한 지 9분이 넘었어요. "방금 예약했어요"를 눌러 주세요.')
+      setError('인증 시간이 지났어요. 새로 예약 후 다시 등록해주세요.')
       return
     }
     const resolvedEnd = resolveEndTime(resolved)
