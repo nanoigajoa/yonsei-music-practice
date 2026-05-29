@@ -32,13 +32,13 @@ export async function POST(req: NextRequest) {
   }
 
   const now = Date.now()
-  const twelveMinAgo = Timestamp.fromMillis(now - 12 * 60 * 1000)
+  const twentyMinAgo = Timestamp.fromMillis(now - 20 * 60 * 1000)
 
-  // 최근 12분 이내 활성 세션만 조회
+  // 최근 20분 이내 활성 세션 조회 (크론 지연 대비 여유 확보)
   const snap = await getAdminDb()
     .collection('alarm_sessions')
     .where('status', '==', 'active')
-    .where('reservedAt', '>=', twelveMinAgo)
+    .where('reservedAt', '>=', twentyMinAgo)
     .get()
 
   const batch = getAdminDb().batch()
