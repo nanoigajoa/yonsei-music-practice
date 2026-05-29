@@ -323,7 +323,7 @@ export default function MyPage() {
           <Link href="/" className="text-white/70 p-1 -ml-1"><BackIcon /></Link>
           <div>
             <h1 className="text-xl font-bold text-white">마이페이지</h1>
-            <p className="text-rb-200 text-xs mt-0.5">연습 기록 · 랭킹</p>
+            <p className="text-rb-200 text-xs mt-0.5">연습 기록</p>
           </div>
         </div>
 
@@ -424,12 +424,12 @@ export default function MyPage() {
                 </div>
                 <button
                   onClick={() => saveNotifySettings({ [key]: !profile[key as keyof typeof profile] })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                  className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors overflow-hidden ${
                     profile[key as keyof typeof profile] ? 'bg-rb-600' : 'bg-gray-300'
                   }`}
                 >
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    profile[key as keyof typeof profile] ? 'translate-x-5' : 'translate-x-0.5'
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    profile[key as keyof typeof profile] ? 'translate-x-5' : 'translate-x-0'
                   }`} />
                 </button>
               </div>
@@ -474,9 +474,9 @@ export default function MyPage() {
           </div>
         )}
 
-        {/* ── 랭킹 탭 (개인만 표시) ── */}
+        {/* ── 연습 기록 ── */}
         <div className="flex items-center gap-2">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">🏆 개인 랭킹</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">🏆 이번 주 연습</p>
           <div className="h-px flex-1 bg-gray-100" />
         </div>
 

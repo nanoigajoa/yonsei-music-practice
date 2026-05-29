@@ -379,20 +379,18 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
             <span>⏰</span><span>태그 알림</span>
           </Link>
-          <Link href="/early-return"
-            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
+          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
             <span>🚪</span><span>조기 반납</span>
-          </Link>
-          <Link href="/transfer"
-            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
+            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
+          </div>
+          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
             <span>🔄</span><span>양도·교환</span>
-          </Link>
-          <button
-            onClick={() => setShowTossSheet(true)}
-            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-red-500 text-white text-xs font-bold active:scale-[0.98] transition-transform gap-0.5 shadow-md"
-          >
+            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
+          </div>
+          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
             <span>🚨</span><span>토스</span>
-          </button>
+            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
+          </div>
         </div>
         <Link href="/facility-report"
           className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
