@@ -157,9 +157,14 @@ export default function HomePage() {
         return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
       })()
     : null
-  const floorData  = byFloor[activeFloor] ?? {}
-  const corners    = Object.keys(floorData).map(Number).sort((a, b) => a - b)
-  const operating  = isOperatingHours(new Date(now))
+  const floorData   = byFloor[activeFloor] ?? {}
+  const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
+  const operating   = isOperatingHours(new Date(now))
+
+  // rooms 배열 기준 재계산 (인증대기 방이 집계에서 빠지는 문제 방지)
+  const totalCount    = status?.rooms.length ?? 0
+  const availableCount = status?.rooms.filter(r => !r.occupied && r.available_periods.length > 0).length ?? 0
+  const occupiedCount  = totalCount - availableCount
 
   function floorAvailable(floor: number) {
     if (!operating) return 0
@@ -213,9 +218,9 @@ export default function HomePage() {
           operating ? (
             <div className="flex gap-2 mt-3">
               {[
-                { label: '전체',   value: status.total,          color: 'bg-rb-700 text-rb-100' },
-                { label: '사용중', value: status.occupied_count,  color: 'bg-rb-800 text-rb-200' },
-                { label: '공실',   value: status.available_count, color: 'bg-emerald-600 text-emerald-50' },
+                { label: '전체',   value: totalCount,     color: 'bg-rb-700 text-rb-100' },
+                { label: '사용중', value: occupiedCount,  color: 'bg-rb-800 text-rb-200' },
+                { label: '공실',   value: availableCount, color: 'bg-emerald-600 text-emerald-50' },
               ].map(({ label, value, color }) => (
                 <div key={label} className={`flex-1 rounded-xl ${color} py-1.5 text-center`}>
                   <p className="text-base font-bold leading-none">{value}</p>
