@@ -336,41 +336,6 @@ export default function AlarmPage() {
     )
   }
 
-  // 기존 활성 세션이 있으면 타이머 화면으로 바로 이동
-  if (!sessionLoading && activeSession) {
-    return (
-      <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
-        <header className="bg-rb-600 px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-5 flex items-center gap-3">
-          <Link href="/" className="text-white/70 p-1 -ml-1"><BackIcon /></Link>
-          <div>
-            <h1 className="text-xl font-bold text-white">등록된 알림</h1>
-            <p className="text-rb-200 text-xs mt-0.5">활성 알림 세션</p>
-          </div>
-        </header>
-        <TimerScreen
-          reservedAt={activeSession.reservedAt}
-          endTime={activeSession.endTime}
-          roomHint={activeSession.roomHint ?? ''}
-          notifyTag={profile?.notifyTag !== false}
-          notifyExtend={profile?.notifyExtend !== false}
-          notifyReturn={profile?.notifyReturn !== false}
-          notified5={activeSession.notified5}
-          notified1={activeSession.notified1}
-          notifiedReturn40={activeSession.notifiedReturn40}
-          notifiedReturn10={activeSession.notifiedReturn10}
-        />
-        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
-          <button
-            onClick={() => setActiveSession(null)}
-            className="w-full h-12 rounded-2xl bg-gray-100 text-gray-500 text-sm font-bold active:scale-[0.98] transition-all"
-          >
-            새 알림 등록하기
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   const endButtons: { mode: EndMode; label: string }[] = [
     { mode: 'plus1h',  label: `+1시간 (${previewEndTime('plus1h')}까지)` },
     { mode: 'plus2h',  label: `+2시간 (${previewEndTime('plus2h')}까지)` },
@@ -390,6 +355,64 @@ export default function AlarmPage() {
       </header>
 
       <main className="flex-1 px-4 pt-6 space-y-7">
+
+        {/* ── 활성 알림 요약 카드 ── */}
+        {!sessionLoading && activeSession && (() => {
+          const deadline = new Date(activeSession.reservedAt.getTime() + 10 * 60 * 1000)
+          const authDone = deadline.getTime() <= Date.now()
+          const nextNoti = (() => {
+            const notifyTagOn    = profile?.notifyTag    !== false
+            const notifyExtendOn = profile?.notifyExtend !== false
+            const notifyReturnOn = profile?.notifyReturn !== false
+            const candidates: { time: Date; label: string }[] = []
+            if (notifyTagOn && !activeSession.notified5)
+              candidates.push({ time: new Date(activeSession.reservedAt.getTime() + 5 * 60 * 1000), label: '태그 알림' })
+            if (notifyTagOn && !activeSession.notified1)
+              candidates.push({ time: new Date(activeSession.reservedAt.getTime() + 8 * 60 * 1000), label: '태그 긴급' })
+            if (activeSession.endTime) {
+              if (notifyExtendOn && !activeSession.notifiedReturn40)
+                candidates.push({ time: new Date(activeSession.endTime.getTime() - 40 * 60 * 1000), label: '연장 알림' })
+              if (notifyReturnOn && !activeSession.notifiedReturn10)
+                candidates.push({ time: new Date(activeSession.endTime.getTime() - 10 * 60 * 1000), label: '반납 알림' })
+            }
+            const future = candidates.filter(c => c.time.getTime() > Date.now())
+            return future.length > 0 ? future[0] : null
+          })()
+
+          return (
+            <div className="rounded-2xl bg-rb-50 border-2 border-rb-200 px-4 py-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-rb-600 uppercase tracking-wider">등록된 알림</p>
+                {activeSession.roomHint && (
+                  <span className="text-xs text-rb-500 font-medium">{activeSession.roomHint}</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* 인증 창 상태 */}
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${authDone ? 'bg-rb-200 text-rb-700' : 'bg-rb-600 text-white'}`}>
+                  {authDone ? '✓ 인증 창 완료' : `태그 창 ${formatCountdown(deadline.getTime() - Date.now())}`}
+                </span>
+
+                {/* 반납 시각 */}
+                {activeSession.endTime && (
+                  <span className="text-xs text-rb-600 font-medium">
+                    반납 {toHHMM(activeSession.endTime)}
+                  </span>
+                )}
+              </div>
+
+              {/* 다음 알림 */}
+              {nextNoti ? (
+                <p className="text-xs text-rb-500">
+                  🔔 다음 알림: {nextNoti.label} {toHHMM(nextNoti.time)} ({relativeMin(nextNoti.time, Date.now())})
+                </p>
+              ) : (
+                <p className="text-xs text-rb-400">남은 예정 알림 없음</p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ① 예약 시각 */}
         <section>
