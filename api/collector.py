@@ -67,7 +67,6 @@ def _slot_status(li) -> str:
 
 def _parse_html(html: str, corner_no: int) -> List[Room]:
     soup = BeautifulSoup(html, "html.parser")
-    now = datetime.now()
     rooms: List[Room] = []
 
     for seat_div in soup.select("div.Body-List"):
@@ -95,10 +94,12 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
                 if idx not in slots or status == S.AVAILABLE:
                     slots[idx] = status
 
-        # 연속 예약 가능 구간 계산
+        # 연속 예약 가능 구간 계산 (PAST 슬롯 제외)
         available_periods: List[Period] = []
         period_start: Optional[datetime] = None
         for idx in sorted(slots):
+            if slots[idx] == S.PAST:
+                continue
             dt = _slot_to_dt(idx)
             st = slots[idx]
             if st == S.AVAILABLE:
@@ -118,23 +119,25 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
                 end=last_dt.strftime("%H:%M"),
             ))
 
-        # 현재 슬롯 상태
+        # 현재 슬롯: 키오스크 PAST 마커 기준 (서버 타임존 독립)
+        # 마지막 PAST 슬롯 다음이 현재 슬롯
+        sorted_idxs = sorted(slots)
+        current_idx: Optional[int] = None
         current_status = S.PAST
-        occupied_until: Optional[str] = None
-        for idx in sorted(slots):
-            dt = _slot_to_dt(idx)
-            if dt <= now < dt + timedelta(minutes=SLOT_MINUTES):
+        for idx in sorted_idxs:
+            if slots[idx] != S.PAST:
+                current_idx = idx
                 current_status = slots[idx]
                 break
 
         occupied = current_status == S.BOOKED
+        occupied_until: Optional[str] = None
 
-        # 사용중이면 언제까지인지 계산
-        if occupied:
-            for idx in sorted(slots):
-                dt = _slot_to_dt(idx)
-                if dt > now and slots[idx] != S.BOOKED:
-                    occupied_until = dt.strftime("%H:%M")
+        # 사용중이면 현재 슬롯 이후 첫 번째 비BOOKED 슬롯이 반납 시각
+        if occupied and current_idx is not None:
+            for idx in sorted_idxs:
+                if idx > current_idx and slots[idx] != S.BOOKED:
+                    occupied_until = _slot_to_dt(idx).strftime("%H:%M")
                     break
 
         rooms.append(Room(
