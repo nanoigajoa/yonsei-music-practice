@@ -299,6 +299,14 @@ export default function AlarmPage() {
       }
     }
     try {
+      // 기존 활성 세션 전부 취소 (중복 알림 방지)
+      const existing = await getDocs(query(
+        collection(db, COLLECTIONS.ALARM_SESSIONS),
+        where('userId', '==', user.uid),
+        where('status', '==', 'active'),
+      ))
+      await Promise.all(existing.docs.map(d => updateDoc(d.ref, { status: 'cancelled' })))
+
       await addDoc(collection(db, COLLECTIONS.ALARM_SESSIONS), {
         userId:            user.uid,
         reservedAt:        Timestamp.fromDate(resolved),
