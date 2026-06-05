@@ -114,39 +114,8 @@ FastAPI (Fly.io, Tokyo)
        └─ GET /rooms  →  SSE /stream → 웹앱 실시간 방 현황
 ```
 
----
-
-## 로컬 실행
-
-```bash
-# 웹앱
-cd app
-npm install
-cp .env.example .env.local   # Firebase 환경변수 입력
-npm run dev
-
-# API 서버
-cd api
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-### 환경변수 (`app/.env.local`)
-
-```
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
-NEXT_PUBLIC_FIREBASE_VAPID_KEY=
-FIREBASE_SERVICE_ACCOUNT_KEY=
-CRON_SECRET=
-NEXT_PUBLIC_KIOSK_API_URL=
-```
-
-## 배포
+## 배포 구성
 
 - **웹앱**: GitHub 푸시 → Vercel 자동 배포
-- **API 서버**: `cd api && fly deploy`
-- **크론**: cron-job.org에서 3개 엔드포인트 매분 실행 (`/api/cron/deadline-guard`, `/api/cron/return-reminder`, `/api/cron/ttl-cleanup`)
+- **API 서버**: Fly.io (Tokyo 리전) — `fly deploy`
+- **크론**: cron-job.org에서 3개 엔드포인트 매분 실행
