@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
+import { clearStudentId, getStudentId } from '@/lib/localBooking'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { DEPARTMENTS, Department } from '@/types/collections'
@@ -204,7 +205,10 @@ export default function MyPage() {
     }
   }, [user, period])
 
-  useEffect(() => { fetchMyStats() }, [fetchMyStats])
+  useEffect(() => {
+    const id = setTimeout(fetchMyStats, 0)
+    return () => clearTimeout(id)
+  }, [fetchMyStats])
 
   async function handleLinkGoogle() {
     setGoogleState('loading')
@@ -357,6 +361,19 @@ export default function MyPage() {
             </div>
           </div>
         )}
+
+        <div className="rounded-2xl bg-gray-50 border-2 border-gray-100 px-4 py-3.5 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-gray-800">이 기기의 예약 학번</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {(() => { const id = getStudentId(); return id ? `${id.slice(0, 4)}••••` : '미등록' })()}
+            </p>
+          </div>
+          <button onClick={() => { clearStudentId(); window.location.assign('/') }}
+            className="h-9 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600">
+            변경
+          </button>
+        </div>
 
         {/* ── 알림 설정 ── */}
         {profile && (

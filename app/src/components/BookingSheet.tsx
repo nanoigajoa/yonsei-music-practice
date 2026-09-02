@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { Room } from '@/hooks/useRoomStatus'
 import { auth } from '@/lib/firebase'
+import {
+  ActiveBooking, clearActiveBooking, getStudentId, saveActiveBooking,
+} from '@/lib/localBooking'
 
 const API_URL = process.env.NEXT_PUBLIC_KIOSK_API_URL ?? 'http://localhost:8000'
 type Step = 'reserve' | 'tag' | 'active' | 'returned'
@@ -20,19 +23,21 @@ function availableDurations(room: Room) {
   return [30, 60, 90, 120].filter((minutes) => minutes <= available)
 }
 
-export function BookingSheet({ room, onClose, onChanged }: {
+export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessionChange }: {
   room: Room
+  resumedBooking?: ActiveBooking | null
   onClose: () => void
   onChanged: () => void
+  onSessionChange: (booking: ActiveBooking | null) => void
 }) {
-  const [studentId, setStudentId] = useState('')
+  const studentId = getStudentId()
   const durations = availableDurations(room)
   const [duration, setDuration] = useState(() => durations.at(-1) ?? 30)
-  const [step, setStep] = useState<Step>('reserve')
+  const [step, setStep] = useState<Step>(() => resumedBooking?.step ?? 'reserve')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState(false)
-  const [returnToken, setReturnToken] = useState('')
+  const [returnToken, setReturnToken] = useState(() => resumedBooking?.returnToken ?? '')
   const number = roomNumber(room)
   const displayedAvailable = !room.occupied && room.available_periods.length > 0
 
@@ -71,6 +76,9 @@ export function BookingSheet({ room, onClose, onChanged }: {
     if (data?.success && data.return_token) {
       setReturnToken(data.return_token)
       setStep('tag')
+      const active = { room, returnToken: data.return_token, step: 'tag' as const, createdAt: Date.now() }
+      saveActiveBooking(active)
+      onSessionChange(active)
       onChanged()
     }
   }
@@ -79,14 +87,27 @@ export function BookingSheet({ room, onClose, onChanged }: {
     const data = await call('/booking/active', {
       student_id: studentId, corner_no: room.corner_no, return_token: returnToken,
     })
-    if (data?.active) setStep('active')
+    if (data?.active) {
+      setStep('active')
+      const active = {
+        room, returnToken, step: 'active' as const,
+        createdAt: resumedBooking?.createdAt ?? Date.now(),
+      }
+      saveActiveBooking(active)
+      onSessionChange(active)
+    }
   }
 
   async function returnRoom() {
     const data = await call('/booking/return', {
       student_id: studentId, corner_no: room.corner_no, return_token: returnToken,
     })
-    if (data?.success) { setStep('returned'); onChanged() }
+    if (data?.success) {
+      clearActiveBooking()
+      onSessionChange(null)
+      setStep('returned')
+      onChanged()
+    }
   }
 
   return (
@@ -109,12 +130,6 @@ export function BookingSheet({ room, onClose, onChanged }: {
         </div>
 
         {step === 'reserve' && <div className="mt-5 space-y-4">
-          <label className="block">
-            <span className="text-xs font-bold text-gray-600">학번</span>
-            <input value={studentId} onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
-              inputMode="numeric" maxLength={10} placeholder="학번 입력"
-              className="mt-1.5 w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:border-rb-500" />
-          </label>
           <label className="block">
             <span className="text-xs font-bold text-gray-600">예약 시간</span>
             <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
@@ -158,7 +173,7 @@ export function BookingSheet({ room, onClose, onChanged }: {
         </div>}
 
         {message && <p className={`mt-3 rounded-xl px-3 py-2 text-center text-sm ${error ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>{message}</p>}
-        <p className="mt-3 text-center text-[10px] text-gray-300">학번은 예약 처리에만 사용되며 앱에 저장되지 않습니다.</p>
+        <p className="mt-3 text-center text-[10px] text-gray-300">학번은 이 기기에만 저장되며 예약 처리에만 사용됩니다.</p>
       </div>
     </div>
   )

@@ -53,7 +53,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             break
 
         if not params:
-            return {"success": False, "message": f"{room_no}호는 현재 예약할 수 없습니다. 현황을 새로고침해 주세요."}
+            return {"success": False, "message": f"실시간 확인 결과: {room_no}호는 현재 예약할 수 없습니다."}
 
         corner, pc_id, open_ts, close_ts, now_cell, cell_min = params
         form = await client.get(
@@ -85,7 +85,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         error = re.search(r"msg=([^\"&]+)", result.text)
         if error:
             return {"success": False, "message": error.group(1)}
-        return {"success": True, "message": f"{room_no}호 예약 완료"}
+        return {"success": True, "message": f"실시간 확인 및 {room_no}호 예약 완료"}
 
 
 async def _booking_no(client: httpx.AsyncClient, corner_no: int) -> str | None:

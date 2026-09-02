@@ -8,6 +8,7 @@ import { NotificationBanner } from '@/components/NotificationBanner'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
+import { ActiveBooking, getActiveBooking } from '@/lib/localBooking'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
 const CONN_BADGE: Record<string, string> = {
@@ -102,7 +103,7 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
       <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
       {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-400 leading-none">실시간 확인</span>
+      <span className="text-[10px] text-gray-400 leading-none">인증대기</span>
     </button>
   )
 }
@@ -117,12 +118,18 @@ export default function HomePage() {
   const [activeFloor, setActiveFloor]   = useState(1)
   const [now, setNow] = useState<number | null>(null)
   const [bookingRoom, setBookingRoom] = useState<Room | null>(null)
+  const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null)
 
   // 운영 시간 표시 갱신
   useEffect(() => {
     const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 60000)
     return () => { clearTimeout(initial); clearInterval(id) }
+  }, [])
+
+  useEffect(() => {
+    const id = setTimeout(() => setActiveBooking(getActiveBooking()), 0)
+    return () => clearTimeout(id)
   }, [])
 
   const updatedAt = status?.updated_at
@@ -213,6 +220,19 @@ export default function HomePage() {
 
       {/* ── 알림 배너 ── */}
       <NotificationBanner user={user} />
+
+      {activeBooking && (
+        <button onClick={() => setBookingRoom(activeBooking.room)}
+          className="mx-4 mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between text-left">
+          <span>
+            <span className="block text-sm font-bold text-emerald-800">진행 중 · {roomNum(activeBooking.room.name)}호</span>
+            <span className="block text-xs text-emerald-600 mt-0.5">
+              {activeBooking.step === 'tag' ? '학생증 태그 후 인증을 확인하세요' : '사용 후 앱에서 반납하세요'}
+            </span>
+          </span>
+          <span className="text-emerald-600 font-bold">열기 →</span>
+        </button>
+      )}
 
       {/* ── 층 탭 ── */}
       <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2 flex gap-2">
@@ -341,7 +361,17 @@ export default function HomePage() {
       </div>
 
       {bookingRoom && (
-        <BookingSheet room={bookingRoom} onClose={() => setBookingRoom(null)} onChanged={refresh} />
+        <BookingSheet
+          room={bookingRoom}
+          resumedBooking={
+            activeBooking?.room.name === bookingRoom.name
+            && activeBooking.room.corner_no === bookingRoom.corner_no
+              ? activeBooking : null
+          }
+          onClose={() => setBookingRoom(null)}
+          onChanged={refresh}
+          onSessionChange={setActiveBooking}
+        />
       )}
 
       {/* ── 온보딩 (신규 사용자) ── */}

@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
+import { getStudentId, saveStudentId } from '@/lib/localBooking'
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading, linkGoogle } = useAnonymousAuth()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
+  const [studentId, setStudentId] = useState('')
+  const [savedStudentId, setSavedStudentId] = useState(() => getStudentId())
   const authenticated = user && !user.isAnonymous
 
   async function login() {
@@ -32,6 +35,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </button>
         {error && <p className="mt-3 text-sm text-red-200">{error}</p>}
         <p className="mt-5 text-[11px] leading-5 text-rb-300">Google 계정은 앱 로그인에만 사용되며<br />학번과 연결되지 않습니다.</p>
+      </main>
+    )
+  }
+  if (!savedStudentId) {
+    const valid = /^\d{8,10}$/.test(studentId)
+    return (
+      <main className="min-h-dvh max-w-md mx-auto bg-rb-600 px-6 flex flex-col items-center justify-center text-center">
+        <div className="w-20 h-20 rounded-3xl bg-white/15 flex items-center justify-center text-4xl">🪪</div>
+        <h1 className="mt-6 text-2xl font-bold text-white">학번을 한 번만 입력하세요</h1>
+        <p className="mt-2 text-sm leading-6 text-rb-200">이 기기에만 저장되며 예약 요청 순간에만 사용됩니다.</p>
+        <input value={studentId} onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
+          inputMode="numeric" maxLength={10} placeholder="학번"
+          className="mt-7 h-14 w-full rounded-2xl bg-white px-4 text-center text-lg font-bold text-gray-900 outline-none" />
+        <button disabled={!valid} onClick={() => { saveStudentId(studentId); setSavedStudentId(studentId) }}
+          className="mt-3 h-14 w-full rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40">
+          저장하고 시작하기
+        </button>
+        <p className="mt-4 text-[11px] leading-5 text-rb-300">서버·Firebase·Firestore에는 저장하지 않습니다.</p>
       </main>
     )
   }

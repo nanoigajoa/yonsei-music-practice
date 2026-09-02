@@ -66,6 +66,9 @@ def verify_return_token(token: str, uid: str, student_id: str, corner_no: int) -
         encoded_text, signature_text = token.split(".", 1)
         encoded = encoded_text.encode()
         supplied = base64.urlsafe_b64decode(signature_text + "=" * (-len(signature_text) % 4))
+        canonical_signature = base64.urlsafe_b64encode(supplied).rstrip(b"=").decode()
+        if not hmac.compare_digest(canonical_signature, signature_text):
+            raise ValueError("non-canonical signature")
         expected = hmac.new(_secret(), encoded, hashlib.sha256).digest()
         if not hmac.compare_digest(supplied, expected):
             raise ValueError("signature")
