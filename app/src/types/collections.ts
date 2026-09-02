@@ -93,7 +93,6 @@ export interface PracticeSession {
 export interface FacilityReport {
   id?: string
   name: string
-  studentId: string        // 학번
   roomId: string           // 호실 (예: "302")
   floor: number | null     // 층 (roomId에서 자동 추출)
   issues: string[]         // 신고 유형 (다중 선택)

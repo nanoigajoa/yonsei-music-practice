@@ -12,6 +12,7 @@ import { UrgentTossSheet } from '@/components/UrgentTossSheet'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { TransferRequest, COLLECTIONS } from '@/types/collections'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
+import { BookingSheet } from '@/components/BookingSheet'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
 const CONN_BADGE: Record<string, string> = {
@@ -56,7 +57,7 @@ function sectionLabel(rooms: Room[]) {
 }
 
 // ── 방 칩 ────────────────────────────────────────────────
-function RoomChip({ room, operating }: { room: Room; operating: boolean }) {
+function RoomChip({ room, operating, onReserve }: { room: Room; operating: boolean; onReserve: (room: Room) => void }) {
   const num     = roomNum(room.name)
   const isOrgan = room.name.includes('오르간')
   const period  = room.available_periods[0]
@@ -88,12 +89,13 @@ function RoomChip({ room, operating }: { room: Room; operating: boolean }) {
 
   if (period) {
     return (
-      <div className="rounded-xl bg-emerald-50 border-2 border-emerald-300 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center">
+      <button onClick={() => onReserve(room)} aria-label={`${num}호 예약하기`}
+        className="rounded-xl bg-emerald-50 border-2 border-emerald-300 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span className="text-xs font-bold text-emerald-800 leading-none mt-0.5">{num}호</span>
         {isOrgan && <span className="text-[9px] text-emerald-400 leading-none">오르간</span>}
         <span className="text-[10px] text-emerald-700 leading-none">{period.start}~</span>
-      </div>
+      </button>
     )
   }
 
@@ -121,6 +123,7 @@ export default function HomePage() {
   const [showTossSheet, setShowTossSheet] = useState(false)
   const [tossSuccess, setTossSuccess]   = useState<{ roomId: string; floor: number } | null>(null)
   const [now, setNow] = useState(Date.now())
+  const [bookingRoom, setBookingRoom] = useState<Room | null>(null)
 
   // 1분마다 now 갱신 (긴급 토스 TTL 만료 트리거)
   useEffect(() => {
@@ -335,7 +338,7 @@ export default function HomePage() {
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} operating={operating} />
+                  <RoomChip key={room.name} room={room} operating={operating} onReserve={setBookingRoom} />
                 ))}
               </div>
             </section>
@@ -418,6 +421,10 @@ export default function HomePage() {
             setTossSuccess({ roomId, floor })
           }}
         />
+      )}
+
+      {bookingRoom && (
+        <BookingSheet room={bookingRoom} onClose={() => setBookingRoom(null)} onChanged={refresh} />
       )}
 
       {/* ── 온보딩 (신규 사용자) ── */}

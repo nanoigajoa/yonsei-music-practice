@@ -34,7 +34,6 @@ export default function FacilityReportPage() {
   const { user } = useAnonymousAuth()
 
   const [name, setName]             = useState('')
-  const [studentId, setStudentId]   = useState('')
   const [roomId, setRoomId]         = useState('')
   const [issues, setIssues]         = useState<string[]>([])
   const [description, setDescription] = useState('')
@@ -50,8 +49,6 @@ export default function FacilityReportPage() {
 
   const canSubmit =
     name.trim().length > 0 &&
-    studentId.trim().length === 8 &&
-    /^\d{8}$/.test(studentId.trim()) &&
     roomId.trim().length > 0 &&
     issues.length > 0 &&
     description.trim().length > 0 &&
@@ -64,7 +61,6 @@ export default function FacilityReportPage() {
     try {
       await addDoc(collection(db, COLLECTIONS.FACILITY_REPORTS), {
         name:        name.trim(),
-        studentId:   studentId.trim(),
         roomId:      roomId.trim(),
         floor,
         issues,
@@ -124,24 +120,6 @@ export default function FacilityReportPage() {
                 placeholder="홍길동"
                 className="w-full h-14 rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 text-base font-medium text-gray-900 placeholder:text-gray-300 focus:border-rb-500 focus:bg-white focus:outline-none transition-colors"
               />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">학번</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                placeholder="20250001"
-                className={`w-full h-14 rounded-2xl border-2 bg-gray-50 px-4 text-base font-medium text-gray-900 placeholder:text-gray-300 focus:bg-white focus:outline-none transition-colors ${
-                  studentId.length > 0 && studentId.length !== 8
-                    ? 'border-red-300 focus:border-red-400'
-                    : 'border-gray-200 focus:border-rb-500'
-                }`}
-              />
-              {studentId.length > 0 && studentId.length !== 8 && (
-                <p className="text-xs text-red-400 mt-1">학번은 8자리예요 ({studentId.length}/8)</p>
-              )}
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 mb-1.5 block">

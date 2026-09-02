@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 # ── 설정 ──────────────────────────────────────────────
 KIOSK_URL    = "http://165.132.176.173/booking/main_list.php"
 API_URL      = os.getenv("KIOSK_API_URL", "https://yonsei-practice-api.fly.dev")
-PUSH_SECRET  = os.getenv("PUSH_SECRET",   "ujBAVj56uI7ZEam0Q4uK4DZhzdcYyW9Hi4IQsAe5GQc")
+PUSH_SECRET  = os.getenv("PUSH_SECRET", "")
 INTERVAL     = int(os.getenv("PUSH_INTERVAL", "60"))   # 초
 ROOMS_FILE   = Path(__file__).parent / "api" / "rooms.json"
 DB_PATH      = Path(os.getenv("SNAPSHOT_DB", Path.home() / ".yonsei-practice" / "snapshots.duckdb"))
@@ -241,6 +241,8 @@ def _save_snapshot(rooms: List[dict], captured_at: datetime) -> None:
 
 
 async def run():
+    if not PUSH_SECRET:
+        raise RuntimeError("PUSH_SECRET 환경변수가 필요합니다.")
     corners = _load_corners()
     _init_db()
     log.info("pusher 시작 | %d개 코너 | %ds 간격 | → %s", len(corners), INTERVAL, API_URL)

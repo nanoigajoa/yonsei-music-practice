@@ -40,9 +40,8 @@ service cloud.firestore {
     // 시설 신문고: 인증 유저만 생성, 본인만 읽기 (관리자는 Admin SDK)
     match /facility_reports/{docId} {
       allow create: if request.auth != null
-                   && request.resource.data.keys().hasAll(['name','studentId','roomId','issues','description'])
-                   && request.resource.data.studentId is string
-                   && request.resource.data.studentId.size() == 8;
+                   && request.resource.data.keys().hasAll(['name','roomId','issues','description'])
+                   && !request.resource.data.keys().hasAny(['studentId']);
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow update, delete: if false;
     }

@@ -15,14 +15,26 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 import collector
+import booking
+from auth_security import current_user, issue_return_token, verify_return_token
 from models import StatusResponse
+from pydantic import BaseModel, Field
 
 PUSH_SECRET = os.getenv("PUSH_SECRET", "")
+BOOKING_ENABLED = os.getenv("BOOKING_ENABLED", "false").lower() == "true"
+ALLOWED_TEST_ROOMS = {
+    room.strip() for room in os.getenv("ALLOWED_TEST_ROOMS", "").split(",") if room.strip()
+}
+ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
 
 # ── 로깅 ───────────────────────────────────────────────
 logging.basicConfig(
@@ -55,10 +67,23 @@ app.state.poll_interval = 60  # 초 단위, 필요 시 변경
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class BookingRequest(BaseModel):
+    student_id: str = Field(pattern=r"^\d{8,10}$")
+    corner_no: int
+    room_no: str = Field(pattern=r"^\d{3}$")
+    limit_time: int = 120
+
+
+class BookingActionRequest(BaseModel):
+    student_id: str = Field(pattern=r"^\d{8,10}$")
+    corner_no: int
+    return_token: str = Field(min_length=20)
 # ──────────────────────────────────────────────────────
 
 
@@ -69,6 +94,7 @@ async def health():
         "status": "ok",
         "data_ready": state is not None,
         "updated_at": state.updated_at if state else None,
+        "booking_enabled": BOOKING_ENABLED,
     }
 
 
@@ -135,13 +161,53 @@ async def stream(request: Request):
     )
 
 
+@app.post("/booking/reserve")
+async def reserve_room(data: BookingRequest, user: dict = Depends(current_user)):
+    if not BOOKING_ENABLED:
+        raise HTTPException(503, "예약 시험 기능이 비활성화되어 있습니다.")
+    if data.room_no not in ALLOWED_TEST_ROOMS:
+        raise HTTPException(403, "현재 시험이 허용된 방이 아닙니다.")
+    try:
+        result = await booking.reserve(data.student_id, data.corner_no, data.room_no, data.limit_time)
+        if result.get("success"):
+            result["return_token"] = issue_return_token(
+                user["uid"], data.student_id, data.corner_no, data.room_no
+            )
+        return result
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("예약 연동 실패: %s", exc)
+        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+
+
+@app.post("/booking/active")
+async def active_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
+    verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
+    try:
+        return await booking.active(data.student_id, data.corner_no)
+    except httpx.HTTPError as exc:
+        log.warning("태그 확인 실패: %s", exc)
+        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+
+
+@app.post("/booking/return")
+async def return_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
+    verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
+    try:
+        return await booking.return_room(data.student_id, data.corner_no)
+    except httpx.HTTPError as exc:
+        log.warning("반납 연동 실패: %s", exc)
+        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+
+
 @app.post("/push")
 async def push(
     data: StatusResponse,
     x_push_secret: str = Header(default=""),
 ):
     """캠퍼스 네트워크 안의 pusher.py가 스크레이핑 결과를 업로드하는 엔드포인트."""
-    if PUSH_SECRET and x_push_secret != PUSH_SECRET:
+    if not PUSH_SECRET:
+        raise HTTPException(503, "PUSH_SECRET is not configured")
+    if x_push_secret != PUSH_SECRET:
         raise HTTPException(401, "Invalid push secret")
     async with collector._lock:
         collector._state = data
