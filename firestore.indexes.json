@@ -15,22 +15,6 @@
         { "fieldPath": "status",  "order": "ASCENDING" },
         { "fieldPath": "endTime", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "transfer_requests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status",  "order": "ASCENDING" },
-        { "fieldPath": "endTime", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "early_returns",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "isTransferred", "order": "ASCENDING" },
-        { "fieldPath": "plannedTime",   "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []

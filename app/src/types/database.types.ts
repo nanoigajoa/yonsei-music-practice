@@ -62,67 +62,6 @@ export interface Database {
           updated_at?: string
         }
       }
-      early_returns: {
-        Row: {
-          id: string
-          room_id: number
-          user_id: string
-          planned_time: string
-          note: string | null
-          is_transferred: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          room_id: number
-          user_id: string
-          planned_time: string
-          note?: string | null
-          is_transferred?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          room_id?: number
-          user_id?: string
-          planned_time?: string
-          note?: string | null
-          is_transferred?: boolean
-          created_at?: string
-        }
-      }
-      transfer_requests: {
-        Row: {
-          id: string
-          room_id: number
-          user_id: string
-          end_time: string
-          type: 'give' | 'swap'
-          matched_by: string | null
-          status: 'open' | 'matched' | 'done' | 'cancelled'
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          room_id: number
-          user_id: string
-          end_time: string
-          type: 'give' | 'swap'
-          matched_by?: string | null
-          status?: 'open' | 'matched' | 'done' | 'cancelled'
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          room_id?: number
-          user_id?: string
-          end_time?: string
-          type?: 'give' | 'swap'
-          matched_by?: string | null
-          status?: 'open' | 'matched' | 'done' | 'cancelled'
-          created_at?: string
-        }
-      }
       push_subscriptions: {
         Row: {
           id: string

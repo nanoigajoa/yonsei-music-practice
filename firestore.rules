@@ -16,22 +16,6 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // 조기 반납: 누구나 읽기, 본인만 쓰기/삭제
-    match /early_returns/{docId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    // 양도 매칭: 누구나 읽기, 본인 요청만 생성, 본인 또는 매처만 수정
-    match /transfer_requests/{docId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null
-        && (resource.data.userId == request.auth.uid || resource.data.matchedBy == request.auth.uid);
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
     // FCM 토큰: 본인 것만
     match /users/{uid}/fcm_tokens/{tokenId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;

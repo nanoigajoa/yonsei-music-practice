@@ -1,16 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore'
 import Link from 'next/link'
-import { db } from '@/lib/firebase'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { NotificationBanner } from '@/components/NotificationBanner'
-import { EarlyReturnList } from '@/components/EarlyReturnList'
-import { UrgentTossSheet } from '@/components/UrgentTossSheet'
 import { OnboardingModal } from '@/components/OnboardingModal'
-import { TransferRequest, COLLECTIONS } from '@/types/collections'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
 
@@ -118,40 +113,15 @@ export default function HomePage() {
   const { status, connState, byFloor, refresh, refreshing } = useRoomStatus()
 
   const [activeFloor, setActiveFloor]   = useState(1)
-  const [allUrgentItems, setAllUrgentItems] = useState<TransferRequest[]>([])
-  const [urgentItems, setUrgentItems]   = useState<TransferRequest[]>([])
-  const [showTossSheet, setShowTossSheet] = useState(false)
-  const [tossSuccess, setTossSuccess]   = useState<{ roomId: string; floor: number } | null>(null)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState<number | null>(null)
   const [bookingRoom, setBookingRoom] = useState<Room | null>(null)
 
-  // 1분마다 now 갱신 (긴급 토스 TTL 만료 트리거)
+  // 운영 시간 표시 갱신
   useEffect(() => {
+    const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 60000)
-    return () => clearInterval(id)
+    return () => { clearTimeout(initial); clearInterval(id) }
   }, [])
-
-  // 긴급 토스 실시간 구독
-  useEffect(() => {
-    const cutoff = Timestamp.fromMillis(Date.now() - 10 * 60 * 1000)
-    const q = query(
-      collection(db, COLLECTIONS.TRANSFERS),
-      where('status', '==', 'urgent'),
-      where('createdAt', '>=', cutoff),
-    )
-    return onSnapshot(q, (snap) => {
-      setAllUrgentItems(
-        snap.docs
-          .map((d) => ({ ...(d.data() as TransferRequest), id: d.id }))
-          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()),
-      )
-    })
-  }, [])
-
-  // 10분 TTL 자동 만료
-  useEffect(() => {
-    setUrgentItems(allUrgentItems.filter((r) => r.createdAt.toMillis() > now - 10 * 60 * 1000))
-  }, [allUrgentItems, now])
 
   const updatedAt = status?.updated_at
     ? (() => {
@@ -162,7 +132,7 @@ export default function HomePage() {
     : null
   const floorData   = byFloor[activeFloor] ?? {}
   const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
-  const operating   = isOperatingHours(new Date(now))
+  const operating   = now !== null && isOperatingHours(new Date(now))
 
   // rooms 배열 기준 재계산 (인증대기 방이 집계에서 빠지는 문제 방지)
   const totalCount    = status?.rooms.length ?? 0
@@ -241,34 +211,6 @@ export default function HomePage() {
 
       {/* ── 알림 배너 ── */}
       <NotificationBanner user={user} />
-
-      {/* ── 긴급 토스 배너 ── */}
-      {urgentItems.length > 0 && (
-        <div className="mx-4 mt-3 rounded-2xl bg-red-50 border border-red-200 overflow-hidden">
-          <div className="px-4 py-2 bg-red-500 flex items-center gap-2">
-            <span className="text-white text-xs font-bold animate-pulse">🚨 긴급</span>
-            <span className="text-red-100 text-xs">방금 올라온 방이 있어요</span>
-          </div>
-          {urgentItems.map((item) => (
-            <Link key={item.id} href="/transfer"
-              className="flex items-center justify-between px-4 py-3 border-t border-red-100 first:border-0 active:bg-red-100 transition-colors">
-              <div>
-                <span className="text-sm font-bold text-red-800">{item.floor}층 {item.roomId}호</span>
-                <span className="text-xs text-red-500 ml-2">지금 바로 수락 가능</span>
-              </div>
-              <span className="text-xs font-bold text-red-500">확인 →</span>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* ── 토스 성공 ── */}
-      {tossSuccess && (
-        <div className="mx-4 mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-center justify-between">
-          <p className="text-sm font-bold text-emerald-800">✅ {tossSuccess.floor}층 {tossSuccess.roomId}호 토스 완료!</p>
-          <button onClick={() => setTossSuccess(null)} className="text-emerald-400 text-xs">닫기</button>
-        </div>
-      )}
 
       {/* ── 층 탭 ── */}
       <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2 flex gap-2">
@@ -369,9 +311,6 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* ── 조기 반납 목록 ── */}
-      <EarlyReturnList />
-
       {/* ── 하단 버튼 ── */}
       <div className="px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+24px)] space-y-2.5">
         {/* 대기 보고하기 — 풀너비 */}
@@ -381,24 +320,11 @@ export default function HomePage() {
         >
           📣 대기 보고하기
         </Link>
-        {/* 보조 기능 3개 + 토스 */}
-        <div className="grid grid-cols-4 gap-2">
+        <div>
           <Link href="/alarm"
-            className="flex flex-col items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-xs font-bold active:scale-[0.98] transition-transform gap-0.5">
-            <span>⏰</span><span>태그 알림</span>
+            className="flex items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-sm font-bold active:scale-[0.98] transition-transform gap-2">
+            <span>⏰</span><span>태그·반납 알림</span>
           </Link>
-          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
-            <span>🚪</span><span>조기 반납</span>
-            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
-          </div>
-          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
-            <span>🔄</span><span>양도·교환</span>
-            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
-          </div>
-          <div className="relative flex flex-col items-center justify-center h-14 rounded-2xl bg-gray-50 border-2 border-gray-100 text-gray-300 text-xs font-bold gap-0.5">
-            <span>🚨</span><span>토스</span>
-            <span className="absolute -top-1.5 -right-1 text-[9px] bg-gray-200 text-gray-500 rounded px-1 font-bold">준비중</span>
-          </div>
         </div>
         <Link href="/facility-report"
           className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
@@ -411,17 +337,6 @@ export default function HomePage() {
           </Link>
         </p>
       </div>
-
-      {showTossSheet && (
-        <UrgentTossSheet
-          user={user}
-          onClose={() => setShowTossSheet(false)}
-          onSuccess={(roomId, floor) => {
-            setShowTossSheet(false)
-            setTossSuccess({ roomId, floor })
-          }}
-        />
-      )}
 
       {bookingRoom && (
         <BookingSheet room={bookingRoom} onClose={() => setBookingRoom(null)} onChanged={refresh} />

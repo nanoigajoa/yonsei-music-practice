@@ -82,8 +82,8 @@ export async function POST(req: NextRequest) {
             sendFcm(
               tokens,
               `⏰ ${mins}분 후 예약 종료`,
-              '연장하려면 지금 키오스크로! 아니면 조기 반납을 등록해주세요 🙏',
-              '/early-return',
+              '연장이 필요하면 지금 키오스크로 이동해주세요.',
+              '/alarm',
             ),
           )
         }),
@@ -104,8 +104,8 @@ export async function POST(req: NextRequest) {
             sendFcm(
               tokens,
               '🚪 10분 후 반납 시간',
-              '반납 후 키오스크 카드를 꼭 빼주세요. 조기 반납하면 다른 학우에게 알림이 가요!',
-              '/early-return',
+              '반납 처리를 잊지 말고 완료해주세요.',
+              '/alarm',
             ),
           )
         }),

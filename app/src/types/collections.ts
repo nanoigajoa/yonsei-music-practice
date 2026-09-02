@@ -20,29 +20,6 @@ export interface Room {
   updatedAt: Timestamp
 }
 
-export interface EarlyReturn {
-  id?: string
-  roomId: string
-  userId: string
-  plannedTime: Timestamp
-  note: string | null
-  isTransferred: boolean
-  createdAt: Timestamp
-}
-
-export interface TransferRequest {
-  id?: string
-  roomId: string
-  floor: 1 | 2 | 3
-  userId: string
-  endTime: Timestamp
-  type: 'give' | 'swap'
-  swapNote: string | null
-  matchedBy: string | null
-  status: 'open' | 'urgent' | 'matched' | 'done' | 'cancelled'
-  createdAt: Timestamp
-}
-
 export interface FcmToken {
   token: string
   updatedAt: Timestamp
@@ -107,8 +84,6 @@ export interface FacilityReport {
 export const COLLECTIONS = {
   CONGESTION:        'congestion_reports',
   ROOMS:             'rooms',
-  EARLY_RETURN:      'early_returns',
-  TRANSFERS:         'transfer_requests',
   FCM_TOKENS:        'fcm_tokens',        // users/{uid}/fcm_tokens/{tokenId}
   ALARM_SESSIONS:    'alarm_sessions',
   FACILITY_REPORTS:  'facility_reports',
