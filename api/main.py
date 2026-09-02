@@ -63,7 +63,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
-app.state.poll_interval = 60  # 초 단위, 필요 시 변경
+app.state.poll_interval = max(10, int(os.getenv("POLL_INTERVAL_SECONDS", "20")))
 
 app.add_middleware(
     CORSMiddleware,

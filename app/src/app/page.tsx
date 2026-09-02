@@ -71,14 +71,15 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
 
   if (room.occupied) {
     return (
-      <div className="rounded-xl bg-rb-50 border-2 border-rb-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center">
+      <button onClick={() => onReserve(room)} aria-label={`${num}호 실시간 확인 후 예약`}
+        className="rounded-xl bg-rb-50 border-2 border-rb-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
         <div className="w-1.5 h-1.5 rounded-full bg-rb-400" />
         <span className="text-xs font-bold text-rb-800 leading-none mt-0.5">{num}호</span>
         {isOrgan && <span className="text-[9px] text-rb-400 leading-none">오르간</span>}
         <span className="text-[10px] text-rb-500 leading-none">
           {room.occupied_until ? `~${room.occupied_until}` : '사용중'}
         </span>
-      </div>
+      </button>
     )
   }
 
@@ -96,12 +97,13 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
 
   // 운영 중이지만 가용 슬롯 없음 (예: 오늘 예약이 꽉 찼거나 반납 완료)
   return (
-    <div className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-50">
+    <button onClick={() => onReserve(room)} aria-label={`${num}호 실시간 확인 후 예약`}
+      className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-60 active:scale-95 transition-transform">
       <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
       {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-400 leading-none">인증대기</span>
-    </div>
+      <span className="text-[10px] text-gray-400 leading-none">실시간 확인</span>
+    </button>
   )
 }
 

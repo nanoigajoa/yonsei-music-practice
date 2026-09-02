@@ -13,7 +13,7 @@ function roomNumber(room: Room) {
 
 function availableDurations(room: Room) {
   const period = room.available_periods[0]
-  if (!period) return [30]
+  if (!period) return [30, 60, 90, 120]
   const [sh, sm] = period.start.split(':').map(Number)
   const [eh, em] = period.end.split(':').map(Number)
   const available = (eh * 60 + em) - (sh * 60 + sm)
@@ -34,6 +34,7 @@ export function BookingSheet({ room, onClose, onChanged }: {
   const [error, setError] = useState(false)
   const [returnToken, setReturnToken] = useState('')
   const number = roomNumber(room)
+  const displayedAvailable = !room.occupied && room.available_periods.length > 0
 
   async function call(path: string, body: Record<string, unknown>) {
     setLoading(true)
@@ -94,9 +95,15 @@ export function BookingSheet({ room, onClose, onChanged }: {
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-bold text-emerald-600">예약 가능</p>
+            <p className={`text-xs font-bold ${displayedAvailable ? 'text-emerald-600' : 'text-rb-600'}`}>
+              {displayedAvailable ? '예약 가능' : '클릭 시 실시간 재확인'}
+            </p>
             <h2 className="mt-0.5 text-xl font-bold text-gray-900">{number}호 예약</h2>
-            <p className="mt-1 text-xs text-gray-400">{room.available_periods[0]?.start}~{room.available_periods[0]?.end}</p>
+            <p className="mt-1 text-xs text-gray-400">
+              {displayedAvailable
+                ? `${room.available_periods[0].start}~${room.available_periods[0].end}`
+                : '화면 표시와 관계없이 키오스크 원본을 다시 확인합니다.'}
+            </p>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-full bg-gray-100 text-gray-500">×</button>
         </div>
@@ -119,7 +126,7 @@ export function BookingSheet({ room, onClose, onChanged }: {
           </label>
           <button onClick={reserve} disabled={loading}
             className="h-14 w-full rounded-2xl bg-rb-600 font-bold text-white disabled:opacity-50">
-            {loading ? '예약 중...' : `${number}호 예약하기`}
+            {loading ? '실시간 확인·예약 중...' : displayedAvailable ? `${number}호 예약하기` : '실시간 확인 후 예약하기'}
           </button>
         </div>}
 
