@@ -53,16 +53,27 @@ def _next_ten_minute(hour: str, minute: str) -> tuple[str, str]:
     return str(rounded // 60), f"{rounded % 60:02d}"
 
 
-async def _login(client: httpx.AsyncClient, student_id: str, corner_no: int) -> None:
+async def _login(client: httpx.AsyncClient, student_id: str, corner_no: int) -> httpx.Response:
     await client.get(
         f"{BASE}/booking/main_view.php",
         params={"corner_no": corner_no, "TimeCellSize": 0},
     )
-    await client.post(
+    return await client.post(
         f"{BASE}/booking/login_proc.php",
         data={"rfid": student_id},
         headers={**HEADERS, "Referer": f"{BASE}/booking/main_view.php"},
     )
+
+
+async def validate_student(student_id: str, corner_no: int = 1) -> bool:
+    """학교 키오스크가 학번을 실제 이용자로 로그인시키는지 확인한다."""
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        for _ in range(2):
+            response = await _login(client, student_id, corner_no)
+            text = response.text
+            if "window.opener.location" in text and "/booking/index.php" in text:
+                return True
+    return False
 
 
 async def _pending_booking_no(client: httpx.AsyncClient, corner_no: int, room_no: str) -> str | None:

@@ -44,6 +44,21 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         soup = BeautifulSoup(OCCUPIED_HTML, "html.parser")
         self.assertEqual(booking._current_room_status(soup.select_one("div.Body-List")), "occupied")
 
+    async def test_student_validation_requires_kiosk_login_success_marker(self):
+        client = AsyncMock()
+        client.get.return_value = Response("<html></html>")
+        client.post.side_effect = [
+            Response("Not Found"),
+            Response("<script>window.opener.location = '/booking/index.php';</script>"),
+        ]
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        context.__aexit__.return_value = False
+
+        with patch.object(booking.httpx, "AsyncClient", return_value=context):
+            self.assertTrue(await booking.validate_student("2022172528"))
+        self.assertEqual(client.post.await_count, 2)
+
     async def test_reserve_finds_room_on_second_page(self):
         client = AsyncMock()
         client.get.side_effect = [
