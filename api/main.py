@@ -37,6 +37,7 @@ AUTO_RETURN_ENABLED = os.getenv("AUTO_RETURN_ENABLED", "false").lower() == "true
 MAX_CONCURRENT_KIOSK_RESERVATIONS = max(1, int(os.getenv("MAX_CONCURRENT_KIOSK_RESERVATIONS", "3")))
 MAX_CONCURRENT_TAG_SYNC_CHECKS = max(1, int(os.getenv("MAX_CONCURRENT_TAG_SYNC_CHECKS", "3")))
 TAG_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("TAG_SYNC_INTERVAL_SECONDS", "5")))
+PRIVACY_NOTICE_VERSION = "2026-09-06"
 ALLOWED_TEST_ROOMS = {
     room.strip() for room in os.getenv("ALLOWED_TEST_ROOMS", "").split(",") if room.strip()
 }
@@ -190,6 +191,7 @@ class KioskImportRequest(BaseModel):
 
 class StudentBindingRequest(BaseModel):
     student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    privacy_notice_version: str | None = Field(default=None, max_length=32)
 
 
 class BookingResultRequest(BaseModel):
@@ -244,6 +246,8 @@ async def bind_student(data: StudentBindingRequest, user: dict = Depends(current
     # 기존 연결은 학교 서버 상태와 무관하게 빠르게 확인한다. 최초 등록만 학교
     # 키오스크 로그인을 검증해 형식만 그럴듯한 가짜 학번이 계정에 고정되지 않게 한다.
     if reservations.binding_for_uid(user["uid"]) is None:
+        if data.privacy_notice_version != PRIVACY_NOTICE_VERSION:
+            raise HTTPException(422, "개인정보 처리 안내를 확인해 주세요.")
         if reservations.binding_uid_for_key(key) is not None:
             raise HTTPException(409, "이 학번은 이미 다른 Google 계정에 등록되어 있습니다.")
         try:
@@ -254,7 +258,10 @@ async def bind_student(data: StudentBindingRequest, user: dict = Depends(current
         if not valid_student:
             raise HTTPException(422, "학교 키오스크에서 확인되지 않는 학번입니다. 본인 학번을 다시 확인해 주세요.")
     try:
-        created = reservations.bind_student(user["uid"], key)
+        created = reservations.bind_student(
+            user["uid"], key,
+            notice_version=PRIVACY_NOTICE_VERSION if data.privacy_notice_version == PRIVACY_NOTICE_VERSION else None,
+        )
     except reservations.StudentBindingConflict as exc:
         raise HTTPException(409, str(exc)) from exc
     return {

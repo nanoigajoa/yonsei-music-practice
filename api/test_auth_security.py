@@ -73,15 +73,22 @@ class BookingSecurityTest(unittest.TestCase):
         main.app.dependency_overrides[main.current_user] = lambda: {
             "uid": "user-b", "firebase": {"sign_in_provider": "google.com"},
         }
-        duplicate = self.client.post("/identity/bind", json={"student_id": "2022172528"})
+        duplicate = self.client.post("/identity/bind", json={"student_id": "2022172528", "privacy_notice_version": main.PRIVACY_NOTICE_VERSION})
         self.assertEqual(duplicate.status_code, 409)
+
+    def test_new_binding_requires_privacy_notice_acknowledgement(self):
+        main.app.dependency_overrides[main.current_user] = lambda: {
+            "uid": "new-user", "firebase": {"sign_in_provider": "google.com"},
+        }
+        response = self.client.post("/identity/bind", json={"student_id": "2023172528"})
+        self.assertEqual(response.status_code, 422)
 
     def test_new_binding_rejects_student_unknown_to_kiosk(self):
         main.app.dependency_overrides[main.current_user] = lambda: {
             "uid": "new-user", "firebase": {"sign_in_provider": "google.com"},
         }
         with patch.object(main.booking, "validate_student", AsyncMock(return_value=False)):
-            response = self.client.post("/identity/bind", json={"student_id": "2022172999"})
+            response = self.client.post("/identity/bind", json={"student_id": "2022172999", "privacy_notice_version": main.PRIVACY_NOTICE_VERSION})
 
         self.assertEqual(response.status_code, 422)
         self.assertIsNone(reservations.binding_for_uid("new-user"))
@@ -91,7 +98,7 @@ class BookingSecurityTest(unittest.TestCase):
             "uid": "new-user", "firebase": {"sign_in_provider": "google.com"},
         }
         with patch.object(main.booking, "validate_student", AsyncMock(return_value=True)):
-            response = self.client.post("/identity/bind", json={"student_id": "2023172528"})
+            response = self.client.post("/identity/bind", json={"student_id": "2023172528", "privacy_notice_version": main.PRIVACY_NOTICE_VERSION})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(reservations.binding_for_uid("new-user"), student_key("2023172528"))

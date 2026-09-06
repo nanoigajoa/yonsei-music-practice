@@ -76,8 +76,15 @@ def _connection():
     conn.execute("""CREATE TABLE IF NOT EXISTS student_bindings (
         uid TEXT PRIMARY KEY,
         student_key TEXT NOT NULL UNIQUE,
-        bound_at TEXT NOT NULL
+        bound_at TEXT NOT NULL,
+        notice_version TEXT,
+        notice_acknowledged_at TEXT
     )""")
+    binding_columns = {row["name"] for row in conn.execute("PRAGMA table_info(student_bindings)")}
+    if "notice_version" not in binding_columns:
+        conn.execute("ALTER TABLE student_bindings ADD COLUMN notice_version TEXT")
+    if "notice_acknowledged_at" not in binding_columns:
+        conn.execute("ALTER TABLE student_bindings ADD COLUMN notice_acknowledged_at TEXT")
     try:
         yield conn
     finally:
@@ -144,7 +151,7 @@ def find_by_request(uid: str, request_id: str) -> Reservation | None:
     return _row(row)
 
 
-def bind_student(uid: str, key: str) -> bool:
+def bind_student(uid: str, key: str, *, notice_version: str | None = None) -> bool:
     """Google UID에 학번 HMAC을 최초 1회만 연결한다.
 
     같은 조합의 재확인은 허용해 새 기기/브라우저 데이터 삭제 뒤에도 복원할 수
@@ -164,7 +171,12 @@ def bind_student(uid: str, key: str) -> bool:
         if existing_student:
             conn.execute("ROLLBACK")
             raise StudentBindingConflict("이 학번은 이미 다른 Google 계정에 등록되어 있습니다.")
-        conn.execute("INSERT INTO student_bindings (uid, student_key, bound_at) VALUES (?, ?, ?)", (uid, key, now))
+        conn.execute(
+            """INSERT INTO student_bindings
+               (uid, student_key, bound_at, notice_version, notice_acknowledged_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (uid, key, now, notice_version, now if notice_version else None),
+        )
         conn.execute("COMMIT")
     return True
 
