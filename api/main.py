@@ -29,6 +29,7 @@ import reservations
 from auth_security import current_user, issue_return_token, student_key, verify_return_token
 from models import StatusResponse
 from pydantic import BaseModel, Field
+from clock import now as kst_now, parse as parse_kst
 
 PUSH_SECRET = os.getenv("PUSH_SECRET", "")
 BOOKING_ENABLED = os.getenv("BOOKING_ENABLED", "false").lower() == "true"
@@ -108,7 +109,7 @@ async def sync_pending_tags_once() -> int:
     for record in expired:
         await collector.clear_reserved(record.corner_no, record.room_no)
 
-    now = datetime.now()
+    now = kst_now()
     pending = [record for record in reservations.open_reservations()
                if record.status == "pending_tag" and record.start_at <= now <= record.tag_deadline + reservations.PENDING_TAG_GRACE]
     results = await asyncio.gather(*(_mark_tagged_active(record) for record in pending))
@@ -171,6 +172,8 @@ class BookingRequest(BaseModel):
     corner_no: int
     room_no: str = Field(pattern=r"^\d{3}$")
     limit_time: int = 120
+    # 네트워크 재시도·브라우저 응답 유실에서도 키오스크 예약을 한 번만 보내기 위한 키.
+    request_id: str | None = Field(default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 class BookingActionRequest(BaseModel):
@@ -187,6 +190,33 @@ class KioskImportRequest(BaseModel):
 
 class StudentBindingRequest(BaseModel):
     student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+
+
+class BookingResultRequest(BaseModel):
+    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+def _result_for_existing_request(record: reservations.Reservation, user: dict, student_id: str) -> dict:
+    """이미 처리 중이거나 완료된 동일 요청의 현재 결과를 안전하게 복원한다."""
+    if record.status == "creating":
+        return {
+            "success": False, "pending": True, "request_id": record.request_id,
+            "message": "예약 요청을 처리 중입니다. 잠시만 기다려 주세요.",
+        }
+    if record.status in {"pending_tag", "active"}:
+        return {
+            "success": True, "pending": False, "request_id": record.request_id,
+            "message": f"{record.room_no}호 예약을 확인했습니다.",
+            "return_token": issue_return_token(
+                user["uid"], student_id, record.corner_no, record.room_no, record.id,
+            ),
+            "reservation": _reservation_payload(record),
+        }
+    return {
+        "success": False, "pending": False, "request_id": record.request_id,
+        "message": "이전 예약 요청은 완료되지 않았습니다. 다시 시도해 주세요.",
+    }
 # ──────────────────────────────────────────────────────
 
 
@@ -316,16 +346,27 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
     if "*" not in ALLOWED_TEST_ROOMS and data.room_no not in ALLOWED_TEST_ROOMS:
         raise HTTPException(403, "현재 시험이 허용된 방이 아닙니다.")
     _require_bound_student(user, data.student_id)
+    if data.request_id:
+        existing = reservations.find_by_request(user["uid"], data.request_id)
+        if existing:
+            return _result_for_existing_request(existing, user, data.student_id)
     # 방/학생 선점은 gate 안에서 수행한다. 그러면 대기열에 있는 요청이 장시간
     # creating 상태로 남지 않으며, gate를 통과한 첫 요청만 외부 키오스크로 간다.
     async with _kiosk_reservation_gate():
+        # 같은 요청이 게이트 대기 중 재전송됐을 수 있으므로 다시 확인한다.
+        if data.request_id:
+            existing = reservations.find_by_request(user["uid"], data.request_id)
+            if existing:
+                return _result_for_existing_request(existing, user, data.student_id)
         try:
             intent = reservations.acquire(
                 id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
                 student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no,
+                request_id=data.request_id,
             )
         except reservations.ReservationConflict as exc:
             raise HTTPException(409, str(exc)) from exc
+
         try:
             result = await booking.reserve(data.student_id, data.corner_no, data.room_no, data.limit_time)
             log.info("예약 결과 | corner=%d room=%s success=%s message=%s",
@@ -334,7 +375,7 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
                 if not result.get("start_at"):
                     log.error("키오스크 예약 성공 응답에 예약 시작 시각이 없습니다.")
                     raise HTTPException(502, "키오스크가 예약 시작 시각을 반환하지 않았습니다. 예약현황을 확인해 주세요.")
-                start_at = datetime.fromisoformat(result["start_at"])
+                start_at = parse_kst(result["start_at"])
                 record = reservations.finalize(intent.id, start_at=start_at, duration_min=data.limit_time,
                                                kiosk_booking_no=result.get("booking_no"))
                 result["return_token"] = issue_return_token(
@@ -360,6 +401,19 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
             raise HTTPException(409, str(exc)) from exc
 
 
+@app.post("/booking/reserve-result")
+async def reservation_result(data: BookingResultRequest, user: dict = Depends(current_user)):
+    """응답을 잃은 브라우저가 동일 요청의 완료 결과를 복구한다."""
+    _require_bound_student(user, data.student_id)
+    record = reservations.find_by_request(user["uid"], data.request_id)
+    if record is None:
+        return {
+            "success": False, "pending": True, "request_id": data.request_id,
+            "message": "예약 요청이 서버 대기열에 있습니다. 잠시 후 다시 확인해 주세요.",
+        }
+    return _result_for_existing_request(record, user, data.student_id)
+
+
 @app.post("/booking/active")
 async def active_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
     claims = verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
@@ -367,13 +421,13 @@ async def active_booking(data: BookingActionRequest, user: dict = Depends(curren
     record = reservations.open_for_uid(user["uid"])
     if not record or record.id != claims.get("reservation") or record.status != "pending_tag":
         return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
-    if datetime.now() < record.start_at:
+    if kst_now() < record.start_at:
         return {
             "success": False,
             "active": False,
             "message": f"{record.start_at.strftime('%H:%M')}부터 학생증을 태그한 뒤 확인할 수 있습니다.",
         }
-    if datetime.now() > record.tag_deadline + reservations.PENDING_TAG_GRACE:
+    if kst_now() > record.tag_deadline + reservations.PENDING_TAG_GRACE:
         reservations.set_status(record.id, "expired")
         await collector.clear_reserved(record.corner_no, record.room_no)
         return {"success": False, "active": False, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
@@ -432,8 +486,8 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
         if result.get("room_no") != data.room_no:
             reservations.fail(intent.id)
             return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
-        start_at = datetime.fromisoformat(result["start_at"])
-        end_at = datetime.fromisoformat(result["end_at"])
+        start_at = parse_kst(result["start_at"])
+        end_at = parse_kst(result["end_at"])
         duration = max(1, int((end_at - start_at).total_seconds() // 60))
         record = reservations.finalize(intent.id, start_at=start_at, duration_min=duration,
                                        kiosk_booking_no=result["booking_no"])

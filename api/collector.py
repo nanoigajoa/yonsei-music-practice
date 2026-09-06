@@ -8,6 +8,7 @@ collector.py - 키오스크 서버 비동기 폴링 + 상태 관리
 import asyncio
 import json
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models import Period, Room, StatusResponse
+from clock import now as kst_now
 
 # ── 설정 ──────────────────────────────────────────────
 KIOSK_URL = "http://165.132.176.173/booking/main_list.php"
@@ -26,6 +28,7 @@ INTER_CORNER_DELAY = 1.0   # 코너 간 대기(초)
 REQUEST_TIMEOUT = 5.0
 SLOT_START_HOUR = 7
 SLOT_MINUTES = 10
+PENDING_TAG_GRACE_SECONDS = max(0, int(os.getenv("PENDING_TAG_GRACE_SECONDS", "20")))
 # ──────────────────────────────────────────────────────
 
 log = logging.getLogger(__name__)
@@ -41,7 +44,7 @@ class S:
 
 
 def _slot_to_dt(slot_idx: int) -> datetime:
-    today = datetime.now().replace(second=0, microsecond=0)
+    today = kst_now().replace(second=0, microsecond=0)
     total_min = SLOT_START_HOUR * 60 + slot_idx * SLOT_MINUTES
     return today.replace(hour=total_min // 60, minute=total_min % 60)
 
@@ -131,18 +134,18 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
 
         occupied = current_status == S.BOOKED
         occupied_until: Optional[str] = None
+        handover = False
 
-        # 반납 직전 handover 감지:
-        # 이전 슬롯이 BOOKED였는데 현재 슬롯이 AVAILABLE로 바뀐 경우
-        # → 키오스크가 다음 예약을 허용하지만 실제 방은 아직 사용 중
-        if current_idx is not None and current_status == S.AVAILABLE:
-            prev_booked = [i for i in sorted_idxs if i < current_idx and slots[i] == S.BOOKED]
-            if prev_booked:
-                occupied = True
-                occupied_until = (_slot_to_dt(current_idx) + timedelta(minutes=SLOT_MINUTES)).strftime("%H:%M")
-                # 현재 슬롯을 available_periods에서 제거 (아직 사용 중)
-                current_slot_time = _slot_to_dt(current_idx).strftime("%H:%M")
-                available_periods = [p for p in available_periods if p.start != current_slot_time]
+        # 현재 10분 슬롯은 BOOKED지만 바로 다음 슬롯이 AVAILABLE이면
+        # 키오스크에서 곧 예약 가능한 회색 슬롯이 보이는 상태다. 이때만
+        # handover로 표시해야 장시간 사용 중인 방까지 '곧 가능'이 되지 않는다.
+        if (
+            current_idx is not None
+            and current_status == S.BOOKED
+            and slots.get(current_idx + 1) == S.AVAILABLE
+        ):
+            handover = True
+            occupied_until = _slot_to_dt(current_idx + 1).strftime("%H:%M")
 
         # 사용중이면 현재 슬롯 이후 첫 번째 비BOOKED 슬롯이 반납 시각
         if occupied and occupied_until is None and current_idx is not None:
@@ -157,6 +160,7 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
             floor=floor,
             occupied=occupied,
             occupied_until=occupied_until,
+            handover=handover,
             available_periods=available_periods,
         ))
 
@@ -167,6 +171,12 @@ def _parse_html(html: str, corner_no: int) -> List[Room]:
 _state: Optional[StatusResponse] = None
 _subscribers: Set[asyncio.Queue] = set()
 _lock = asyncio.Lock()
+_pending_reservations: Dict[tuple[int, str], dict] = {}
+# 주기 폴링과 예약 직후 강제 갱신이 겹치면 같은 키오스크 페이지를 여러 번
+# 읽게 된다. 실제 조회는 언제나 하나만 실행하고, 동시 강제 갱신은 같은 작업을
+# 함께 기다린다.
+_refresh_gate = asyncio.Lock()
+_manual_refresh_task: asyncio.Task[None] | None = None
 # ──────────────────────────────────────────────────────
 
 
@@ -184,6 +194,52 @@ def unsubscribe(q: asyncio.Queue) -> None:
     _subscribers.discard(q)
 
 
+async def mark_reserved(corner_no: int, room_no: str, *, start_at: datetime,
+                        end_at: datetime, tag_deadline: datetime, status: str = "pending_tag") -> None:
+    """예약 성공 직후부터 키오스크 반영 전까지 인증대기/사용중을 보인다."""
+    global _state
+    suffix = f"{room_no}호"
+    _pending_reservations[(corner_no, room_no)] = {
+        "start_at": start_at, "end_at": end_at, "tag_deadline": tag_deadline, "status": status,
+    }
+    if _state is None:
+        return
+    async with _lock:
+        rooms = []
+        changed = False
+        for room in _state.rooms:
+            if room.corner_no == corner_no and room.name.endswith(suffix):
+                room = room.model_copy(update={
+                    "occupied": True,
+                    "handover": False,
+                    "available_periods": [],
+                    "reservation_state": status,
+                    "reservation_start": start_at.strftime("%H:%M"),
+                    "tag_deadline": tag_deadline.strftime("%H:%M"),
+                })
+                changed = True
+            rooms.append(room)
+        if not changed:
+            return
+        _state = _state.model_copy(update={
+            "rooms": rooms,
+            "occupied_count": sum(1 for room in rooms if room.occupied),
+            "available_count": sum(1 for room in rooms if room.available_periods),
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+    await _notify()
+
+
+async def clear_reserved(corner_no: int, room_no: str) -> None:
+    """예약 취소 성공 후 선점 표시를 즉시 해제한다."""
+    _pending_reservations.pop((corner_no, room_no), None)
+
+
+async def mark_active(corner_no: int, room_no: str, *, start_at: datetime, end_at: datetime) -> None:
+    await mark_reserved(corner_no, room_no, start_at=start_at, end_at=end_at,
+                        tag_deadline=start_at + timedelta(minutes=10), status="active")
+
+
 async def _notify() -> None:
     if _state is None:
         return
@@ -198,19 +254,30 @@ def _load_corners() -> List[int]:
 
 
 async def _fetch_corner(client: httpx.AsyncClient, corner_no: int) -> List[Room]:
-    try:
-        res = await client.get(
-            KIOSK_URL,
-            params={"corner_no": corner_no, "TimeCellSize": 0, "page": ""},
-            timeout=REQUEST_TIMEOUT,
-        )
-        if res.status_code != 200:
-            log.warning("corner_no=%d → HTTP %d", corner_no, res.status_code)
-            return []
-        return _parse_html(res.text, corner_no)
-    except httpx.RequestError as e:
-        log.warning("corner_no=%d 요청 실패: %s", corner_no, e)
-        return []
+    all_rooms: List[Room] = []
+    seen_names: set[str] = set()
+
+    for page in ["", "2", "3", "4"]:
+        try:
+            res = await client.get(
+                KIOSK_URL,
+                params={"corner_no": corner_no, "TimeCellSize": 0, "page": page},
+                timeout=REQUEST_TIMEOUT,
+            )
+            if res.status_code != 200:
+                log.warning("corner_no=%d page=%s → HTTP %d", corner_no, page or "1", res.status_code)
+                break
+            rooms = _parse_html(res.text, corner_no)
+            new_rooms = [room for room in rooms if room.name not in seen_names]
+            if not new_rooms:
+                break
+            all_rooms.extend(new_rooms)
+            seen_names.update(room.name for room in new_rooms)
+        except httpx.RequestError as e:
+            log.warning("corner_no=%d page=%s 요청 실패: %s", corner_no, page or "1", e)
+            break
+
+    return all_rooms
 
 
 async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
@@ -225,6 +292,29 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
     if not all_rooms:
         log.warning("방 목록이 비어있습니다 — 키오스크 접근 불가 또는 push 모드. 기존 상태 유지.")
         return
+
+    now_local = kst_now()
+    for key, overlay in list(_pending_reservations.items()):
+        expires_at = (
+            overlay["tag_deadline"] + timedelta(seconds=PENDING_TAG_GRACE_SECONDS)
+            if overlay["status"] == "pending_tag" else overlay["end_at"]
+        )
+        if expires_at <= now_local:
+            _pending_reservations.pop(key, None)
+            continue
+        corner_no, room_no = key
+        suffix = f"{room_no}호"
+        for index, room in enumerate(all_rooms):
+            if room.corner_no == corner_no and room.name.endswith(suffix):
+                all_rooms[index] = room.model_copy(update={
+                    "occupied": True,
+                    "handover": False,
+                    "available_periods": [],
+                    "reservation_state": overlay["status"],
+                    "reservation_start": overlay["start_at"].strftime("%H:%M"),
+                    "tag_deadline": overlay["tag_deadline"].strftime("%H:%M"),
+                })
+                break
 
     occupied_count = sum(1 for r in all_rooms if r.occupied)
     available_count = sum(1 for r in all_rooms if r.available_periods)
@@ -245,15 +335,41 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
     await _notify()
 
 
+async def _refresh_serial(corners: List[int]) -> None:
+    """키오스크 전체 조회는 프로세스당 한 번만 수행한다."""
+    async with _refresh_gate:
+        async with httpx.AsyncClient(headers=HEADERS) as client:
+            await _refresh(client, corners)
+
+
 async def polling_loop(interval: int = 60) -> None:
     """FastAPI lifespan에서 백그라운드 태스크로 실행."""
     corners = _load_corners()
     log.info("폴링 시작 | corner %s | %d초 간격", corners, interval)
 
-    async with httpx.AsyncClient(headers=HEADERS) as client:
-        while True:
+    while True:
+        try:
+            await _refresh_serial(corners)
+        except Exception:
+            log.exception("_refresh 오류")
+        await asyncio.sleep(interval)
+
+
+async def refresh_now() -> None:
+    """예약/취소 직후 상태를 즉시 원본 키오스크에서 다시 읽는다.
+
+    60명이 동시에 반납해도 전체 조회는 한 번만 보낸다. 호출자는 그 한 번의
+    결과를 함께 기다리므로, 오래된 폴링 결과가 새 상태를 덮어쓰지 않는다.
+    """
+    global _manual_refresh_task
+    if _manual_refresh_task is None or _manual_refresh_task.done():
+        async def run() -> None:
             try:
-                await _refresh(client, corners)
+                await _refresh_serial(_load_corners())
             except Exception:
-                log.exception("_refresh 오류")
-            await asyncio.sleep(interval)
+                # return/cancel 요청은 이미 키오스크에서 성공했을 수 있다.
+                # 후속 화면 갱신 실패가 그 성공 응답을 뒤집지 않게 로그만 남긴다.
+                log.exception("즉시 키오스크 상태 갱신 오류")
+
+        _manual_refresh_task = asyncio.create_task(run())
+    await asyncio.shield(_manual_refresh_task)

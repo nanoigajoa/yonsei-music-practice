@@ -8,6 +8,7 @@ from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
+from clock import now as kst_now
 
 BASE = "http://165.132.176.173"
 HEADERS = {"User-Agent": "Mozilla/5.0 Edge"}
@@ -199,7 +200,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         error = re.search(r"msg=([^\"&]+)", result.text)
         if error:
             return {"success": False, "message": unquote(error.group(1))}
-        now = datetime.now()
+        now = kst_now()
         start_at = now.replace(hour=int(b_hour), minute=int(b_min), second=0, microsecond=0)
         # 자정을 넘기는 예약도 키오스크가 허용하는 경우를 보존한다.
         if start_at < now - timedelta(minutes=10):
@@ -303,7 +304,7 @@ async def active_details(student_id: str, corner_no: int) -> dict:
     times = re.search(r"(\d{1,2}:\d{2})\s*~\s*(\d{1,2}:\d{2})", text)
     if not room_match or not times:
         return {"success": False, "message": "키오스크 사용 중 예약의 방 또는 시간을 확인하지 못했습니다."}
-    now = datetime.now()
+    now = kst_now()
     start_hour, start_min = map(int, times.group(1).split(":"))
     end_hour, end_min = map(int, times.group(2).split(":"))
     start_at = now.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)

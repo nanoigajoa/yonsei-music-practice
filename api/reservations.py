@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from clock import now as kst_now, normalize as kst_normalize, parse as parse_kst
 
 # 로컬은 프로젝트 내부의 .data를 쓰고, Fly 배포는 영속 볼륨(/data)을 지정한다.
 # 컨테이너 파일시스템 기본 영역은 재시작/배포 때 초기화되므로 배포 환경에서는
@@ -49,6 +50,7 @@ class Reservation:
     tag_deadline: datetime
     status: str
     kiosk_booking_no: str | None = None
+    request_id: str | None = None
 
 
 @contextmanager
@@ -60,11 +62,15 @@ def _connection():
         id TEXT PRIMARY KEY, uid TEXT NOT NULL, student_id TEXT NOT NULL,
         student_key TEXT NOT NULL DEFAULT '', corner_no INTEGER NOT NULL, room_no TEXT NOT NULL,
         start_at TEXT NOT NULL, end_at TEXT NOT NULL, tag_deadline TEXT NOT NULL,
-        status TEXT NOT NULL, kiosk_booking_no TEXT, created_at TEXT NOT NULL
+        status TEXT NOT NULL, kiosk_booking_no TEXT, request_id TEXT, created_at TEXT NOT NULL
     )""")
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(reservations)")}
     if "student_key" not in columns:
         conn.execute("ALTER TABLE reservations ADD COLUMN student_key TEXT NOT NULL DEFAULT ''")
+    if "request_id" not in columns:
+        conn.execute("ALTER TABLE reservations ADD COLUMN request_id TEXT")
+    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS reservations_uid_request_id_unique
+                    ON reservations(uid, request_id) WHERE request_id IS NOT NULL""")
     # 학번 원문은 저장하지 않는다. BOOKING_TOKEN_SECRET로 만든 HMAC만 보관해
     # Google UID ↔ 학번의 일대일 연결과 중복 차단에 사용한다.
     conn.execute("""CREATE TABLE IF NOT EXISTS student_bindings (
@@ -84,9 +90,9 @@ def _row(row: sqlite3.Row | None) -> Reservation | None:
     return Reservation(
         id=row["id"], uid=row["uid"], student_id=row["student_id"],
         student_key=row["student_key"], corner_no=row["corner_no"], room_no=row["room_no"],
-        start_at=datetime.fromisoformat(row["start_at"]), end_at=datetime.fromisoformat(row["end_at"]),
-        tag_deadline=datetime.fromisoformat(row["tag_deadline"]), status=row["status"],
-        kiosk_booking_no=row["kiosk_booking_no"],
+        start_at=parse_kst(row["start_at"]), end_at=parse_kst(row["end_at"]),
+        tag_deadline=parse_kst(row["tag_deadline"]), status=row["status"],
+        kiosk_booking_no=row["kiosk_booking_no"], request_id=row["request_id"],
     )
 
 
@@ -101,7 +107,7 @@ def expire_pending(now: datetime | None = None) -> list[Reservation]:
     대신 판단하지 않기 위해서다. 다음 예약은 여전히 키오스크가 최종 거절할
     수 있지만, 끝난 로컬 기록 때문에 영구 차단되지는 않는다.
     """
-    now = now or datetime.now()
+    now = kst_normalize(now) if now else kst_now()
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         rows = conn.execute(
@@ -128,6 +134,16 @@ def get(id: str) -> Reservation | None:
     return _row(row)
 
 
+def find_by_request(uid: str, request_id: str) -> Reservation | None:
+    """같은 브라우저 요청의 재전송은 이전 처리 결과를 돌려준다."""
+    with _connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM reservations WHERE uid=? AND request_id=? ORDER BY created_at DESC LIMIT 1",
+            (uid, request_id),
+        ).fetchone()
+    return _row(row)
+
+
 def bind_student(uid: str, key: str) -> bool:
     """Google UID에 학번 HMAC을 최초 1회만 연결한다.
 
@@ -135,7 +151,7 @@ def bind_student(uid: str, key: str) -> bool:
     있다. 다른 학번으로 변경하거나, 이미 다른 UID에 연결된 학번은 거절한다.
     반환값은 새 연결이면 True, 기존 연결 재확인이면 False다.
     """
-    now = datetime.now().isoformat()
+    now = kst_now().isoformat()
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         existing_uid = conn.execute("SELECT student_key FROM student_bindings WHERE uid=?", (uid,)).fetchone()
@@ -196,13 +212,14 @@ def open_reservations() -> list[Reservation]:
     return [item for row in rows if (item := _row(row))]
 
 
-def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: int, room_no: str) -> Reservation:
+def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: int, room_no: str,
+            request_id: str | None = None) -> Reservation:
     """키오스크 호출 전에 학번과 방을 함께 선점한다.
 
     BEGIN IMMEDIATE가 단일 게이트웨이의 동시 요청을 직렬화한다. UID가 아니라
     student_key로 검사하므로 다른 기기/Google 계정도 같은 학생으로 취급한다.
     """
-    now = datetime.now()
+    now = kst_now()
     placeholders = ",".join("?" for _ in OPEN_STATUSES)
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -227,16 +244,17 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
             conn.execute("ROLLBACK")
             raise ReservationConflict("방금 다른 사용자가 이 방을 예약했습니다. 다른 방을 선택해 주세요.")
         conn.execute("""INSERT INTO reservations
-            (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?)""", (
+            (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?)""", (
                 id, uid, student_id, student_key, corner_no, room_no,
-                now.isoformat(), now.isoformat(), now.isoformat(), now.isoformat(),
+                now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(),
             ))
         conn.execute("COMMIT")
-    return Reservation(id, uid, student_id, student_key, corner_no, room_no, now, now, now, "creating")
+    return Reservation(id, uid, student_id, student_key, corner_no, room_no, now, now, now, "creating", request_id=request_id)
 
 
 def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no: str | None) -> Reservation:
+    start_at = kst_normalize(start_at)
     end_at = start_at + timedelta(minutes=duration_min)
     deadline = start_at + timedelta(minutes=10)
     with _connection() as conn:

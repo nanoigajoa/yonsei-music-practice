@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT_DIR=/root/yoneum-lxc-20260904/campus-deploy-private-transfer
 SOURCE_BASE=https://raw.githubusercontent.com/nanoigajoa/yonsei-music-practice/staging-booking/api
-FILES=(booking.py main.py reservations.py reset_student_binding.py)
+# 하나라도 빠지면 새 예약 상태가 구버전 모듈과 섞일 수 있으므로, 예약 런타임
+# 전체를 원자적으로 검사한 뒤 교체한다.
+FILES=(booking.py main.py reservations.py collector.py auto_return.py clock.py reset_student_binding.py)
 
 cd "$ROOT_DIR"
 TEMP_DIR="$(mktemp -d)"
