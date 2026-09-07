@@ -4,11 +4,10 @@ import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { COMMUNITY_API, SUPPORT_URL } from '@/lib/community'
 import { AppMenu } from '@/components/AppMenu'
-interface Message { id: number; author: string; text: string; created_at: number; mine: boolean }
+interface Message { id: number; text: string; created_at: number; mine: boolean }
 export default function LoungePage() {
   const { user } = useAnonymousAuth()
   const [messages, setMessages] = useState<Message[]>([])
-  const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
@@ -40,7 +39,6 @@ export default function LoungePage() {
           if (data.type === 'history') {
             attempts = 0
             setMessages(data.messages)
-            setNickname(data.nickname)
             setConnected(true)
             setError('')
             if (pending.current) ws.send(JSON.stringify(pending.current))
@@ -78,7 +76,7 @@ export default function LoungePage() {
       <h1 className="text-2xl font-bold mt-3">음대 라운지</h1><p className="text-sm text-rb-100 mt-1">학우들과 나누는 전체 채팅방</p>
     </header>
     <div className="px-4 py-3 border-b border-gray-100 text-xs text-gray-600 shrink-0">
-      <p><span className={connected ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>{connected ? '● 실시간 연결' : '○ 연결 중'}</span>{nickname && ` · 나의 라운지 닉네임: ${nickname}`}</p>
+      <p><span className={connected ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>{connected ? '● 실시간 연결' : '○ 연결 중'}</span><span> · 모두 익명으로 대화해요</span></p>
       <p className="mt-2 leading-5">서로 존중하며 이야기해요. 개인정보·비방·도배는 올리지 마세요.</p>
       <details className="mt-2 rounded-xl bg-slate-50 p-3 max-h-[30dvh] overflow-y-auto">
         <summary className="cursor-pointer font-semibold text-rb-700">라운지 이용 규칙</summary>
@@ -87,7 +85,8 @@ export default function LoungePage() {
           <li>욕설·비방·혐오 표현, 특정인을 괴롭히는 글은 올리지 마세요.</li>
           <li>본인과 타인의 학번·연락처·실명 등 개인정보를 공유하지 마세요.</li>
           <li>같은 내용의 도배, 광고·홍보와 사칭은 삼가 주세요.</li>
-          <li>자동으로 정해진 라운지 닉네임을 사용해요. 메시지는 다른 라운지 이용자에게 공개돼요.</li>
+          <li>모든 작성자는 ‘익명’으로 표시돼요. 내 메시지는 나에게만 ‘익명 (나)’로 보여요. 메시지 내용은 라운지 이용자 모두에게 공개돼요.</li>
+          <li>서비스 이용에는 로그인이 필요하며, 운영을 위해 메시지와 계정 연결 정보는 서버에 보관돼요.</li>
           <li>텍스트만 한 번에 500자까지 보낼 수 있어요. 대화는 최대 7일·최근 1,000개까지 보관하며 최근 100개를 보여드려요.</li>
         </ul>
         <p className="mt-3 leading-5">불편한 대화나 개선 의견은 <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-rb-700 underline underline-offset-2">운영자 문의 ↗</a>로 알려 주세요.</p>
@@ -97,7 +96,7 @@ export default function LoungePage() {
     <div ref={scroller} role="log" aria-label="음대 라운지 대화" aria-live="polite" className="flex-1 overflow-y-auto px-4 py-5 space-y-4 bg-slate-50" onScroll={() => { const el = scroller.current; if (el) follow.current = el.scrollHeight-el.scrollTop-el.clientHeight < 120 }}>
       {connected && messages.length === 0 && <p className="text-sm text-gray-500 text-center py-10">첫 인사를 남겨 보세요. 🎵</p>}
       {messages.map(m => <article key={m.id} className={`flex flex-col ${m.mine ? 'items-end' : 'items-start'}`}>
-        <p className="text-[11px] text-gray-500 mb-1">{m.mine ? '나' : m.author}</p>
+        <p className="text-[11px] text-gray-500 mb-1">{m.mine ? '익명 (나)' : '익명'}</p>
         <p className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${m.mine ? 'bg-rb-600 text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>{m.text}</p>
         <time className="mt-1 text-[10px] text-gray-500" dateTime={new Date(m.created_at*1000).toISOString()}>{new Date(m.created_at*1000).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false})}</time>
       </article>)}<div ref={bottom} />
