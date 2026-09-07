@@ -9,6 +9,7 @@ import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
 import { ActiveBooking, getActiveBooking } from '@/lib/localBooking'
+import { isCurrentlyAvailable } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
 const CONN_BADGE: Record<string, string> = {
@@ -50,6 +51,19 @@ function sectionLabel(rooms: Room[]) {
   return nums[0] === nums[nums.length - 1]
     ? `${nums[0]}호`
     : `${nums[0]}~${nums[nums.length - 1]}호`
+}
+
+function bookingTime(value?: string) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function bookingPeriod(booking: ActiveBooking) {
+  const start = bookingTime(booking.startAt)
+  const end = bookingTime(booking.endAt)
+  return start && end ? `${start}–${end}` : null
 }
 
 // ── 방 칩 ────────────────────────────────────────────────
@@ -123,6 +137,7 @@ export default function HomePage() {
   const [now, setNow] = useState<number | null>(null)
   const [bookingRoom, setBookingRoom] = useState<Room | null>(null)
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null)
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false)
 
   // 운영 시간 표시 갱신
   useEffect(() => {
@@ -157,15 +172,30 @@ export default function HomePage() {
 
   // rooms 배열 기준 재계산 (인증대기 방이 집계에서 빠지는 문제 방지)
   const totalCount    = status?.rooms.length ?? 0
-  const availableCount = status?.rooms.filter(r => !r.occupied && r.available_periods.length > 0).length ?? 0
+  const availableCount = status?.rooms.filter(isCurrentlyAvailable).length ?? 0
   const occupiedCount  = status?.rooms.filter(r => r.occupied).length ?? 0
 
   function floorAvailable(floor: number) {
     if (!operating) return 0
     return Object.values(byFloor[floor] ?? {})
       .flat()
-      .filter((r) => !r.occupied && r.available_periods.length > 0).length
+      .filter(isCurrentlyAvailable).length
   }
+
+  const availableGroups = Object.entries(byFloor)
+    .sort(([floorA], [floorB]) => Number(floorA) - Number(floorB))
+    .flatMap(([floor, floorCorners]) =>
+      Object.entries(floorCorners)
+        .sort(([cornerA], [cornerB]) => Number(cornerA) - Number(cornerB))
+        .map(([corner, rooms]) => ({
+          floor: Number(floor),
+          cornerNo: Number(corner),
+          rooms: rooms.filter(isCurrentlyAvailable),
+        }))
+        .filter((group) => group.rooms.length > 0),
+    )
+
+  const availableOnlyActive = operating && showAvailableOnly
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
@@ -211,16 +241,26 @@ export default function HomePage() {
         {status && (
           operating ? (
             <div className="flex gap-2 mt-3">
-              {[
-                { label: '전체',   value: totalCount,     color: 'bg-rb-700 text-rb-100' },
-                { label: '사용중', value: occupiedCount,  color: 'bg-rb-800 text-rb-200' },
-                { label: '공실',   value: availableCount, color: 'bg-emerald-700 text-white' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className={`flex-1 rounded-xl ${color} py-1.5 text-center`}>
-                  <p className="text-base font-bold leading-none">{value}</p>
-                  <p className="text-[10px] mt-0.5">{label}</p>
-                </div>
-              ))}
+              <div className="flex-1 rounded-xl bg-rb-700 text-rb-100 py-1.5 text-center">
+                <p className="text-base font-bold leading-none">{totalCount}</p>
+                <p className="text-[10px] mt-0.5">전체</p>
+              </div>
+              <div className="flex-1 rounded-xl bg-rb-800 text-rb-200 py-1.5 text-center">
+                <p className="text-base font-bold leading-none">{occupiedCount}</p>
+                <p className="text-[10px] mt-0.5">사용중</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAvailableOnly((value) => !value)}
+                aria-pressed={availableOnlyActive}
+                aria-label={availableOnlyActive ? '전체 방 보기' : `현재 공실 ${availableCount}개만 보기`}
+                className={`flex-1 rounded-xl bg-emerald-700 py-1.5 text-center text-white active:scale-95 transition-all ${
+                  availableOnlyActive ? 'ring-2 ring-white ring-offset-2 ring-offset-rb-600' : ''
+                }`}
+              >
+                <p className="text-base font-bold leading-none">{availableCount}</p>
+                <p className="text-[10px] mt-0.5">{availableOnlyActive ? '전체 보기' : '공실만 보기'}</p>
+              </button>
             </div>
           ) : (
             <div className="mt-3 rounded-xl bg-rb-700 px-4 py-2 text-center">
@@ -233,49 +273,46 @@ export default function HomePage() {
       {/* ── 알림 배너 ── */}
       <NotificationBanner user={user} />
 
-      {activeBooking && (
-        <button onClick={() => setBookingRoom(activeBooking.room)}
-          className="mx-4 mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between text-left">
-          <span>
-            <span className="block text-sm font-bold text-emerald-800">진행 중 · {roomNum(activeBooking.room.name)}호</span>
-            <span className="block text-xs text-emerald-600 mt-0.5">
-              {activeBooking.step === 'tag' ? '학생증 태그만 하면 자동으로 사용 상태가 갱신됩니다' : '사용 후 앱에서 반납하세요'}
-            </span>
-          </span>
-          <span className="text-emerald-600 font-bold">열기 →</span>
-        </button>
-      )}
-
       {/* ── 층 탭 ── */}
-      <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2 flex gap-2">
-        {FLOORS.map((floor) => {
-          const avail   = floorAvailable(floor)
-          const hasData = Object.keys(byFloor[floor] ?? {}).length > 0
-          if (!hasData && status) return null
-          return (
-            <button
-              key={floor}
-              onClick={() => setActiveFloor(floor)}
-              className={`flex-1 relative rounded-full py-1.5 text-sm font-bold transition-all ${
-                activeFloor === floor
-                  ? 'bg-rb-600 text-white shadow-sm'
-                  : 'bg-rb-50 text-rb-600'
-              }`}
-            >
-              {floor}층
-              {avail > 0 && (
-                <span className={`
-                  absolute -top-1 -right-1 min-w-[16px] h-4 px-1
-                  rounded-full text-[9px] font-bold leading-4 text-center
-                  ${activeFloor === floor ? 'bg-emerald-400 text-white' : 'bg-emerald-500 text-white'}
-                `}>
-                  {avail}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      {availableOnlyActive ? (
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2.5 flex items-center justify-between">
+          <p className="text-sm font-bold text-emerald-800">현재 공실 {availableCount}개</p>
+          <button type="button" onClick={() => setShowAvailableOnly(false)}
+            className="min-h-9 px-3 rounded-full bg-white border border-emerald-200 text-xs font-bold text-emerald-700 active:scale-95 transition-transform">
+            전체 방 보기
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2 flex gap-2">
+          {FLOORS.map((floor) => {
+            const avail   = floorAvailable(floor)
+            const hasData = Object.keys(byFloor[floor] ?? {}).length > 0
+            if (!hasData && status) return null
+            return (
+              <button
+                key={floor}
+                onClick={() => setActiveFloor(floor)}
+                className={`flex-1 relative rounded-full py-1.5 text-sm font-bold transition-all ${
+                  activeFloor === floor
+                    ? 'bg-rb-600 text-white shadow-sm'
+                    : 'bg-rb-50 text-rb-600'
+                }`}
+              >
+                {floor}층
+                {avail > 0 && (
+                  <span className={`
+                    absolute -top-1 -right-1 min-w-[16px] h-4 px-1
+                    rounded-full text-[9px] font-bold leading-4 text-center
+                    ${activeFloor === floor ? 'bg-emerald-400 text-white' : 'bg-emerald-500 text-white'}
+                  `}>
+                    {avail}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── 방 목록 ── */}
       <main className="flex-1 px-4 pt-4 space-y-5">
@@ -303,11 +340,11 @@ export default function HomePage() {
         )}
 
         {/* 구역별 방 그리드 */}
-        {status && corners.map((cornerNo) => {
+        {status && !availableOnlyActive && corners.map((cornerNo) => {
           const rooms     = floorData[cornerNo]
           if (!rooms?.length) return null
           const availCount = operating
-            ? rooms.filter((r) => !r.occupied && r.available_periods.length > 0).length
+            ? rooms.filter(isCurrentlyAvailable).length
             : 0
           const building  = buildingOf(cornerNo)
           return (
@@ -335,7 +372,39 @@ export default function HomePage() {
           )
         })}
 
-        {status && corners.length === 0 && (
+        {status && availableOnlyActive && availableGroups.map(({ floor, cornerNo, rooms }) => (
+          <section key={`${floor}-${cornerNo}`}>
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                {floor}층 · <span className="text-rb-700">{buildingOf(cornerNo)}</span> · {sectionLabel(rooms)}
+              </h2>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                공실 {rooms.length}개
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {rooms.map((room) => (
+                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} operating={operating} onReserve={openBooking} />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {status && availableOnlyActive && availableGroups.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <p className="text-3xl">🎵</p>
+            <div>
+              <p className="font-bold text-gray-800">현재 바로 예약 가능한 공실이 없어요</p>
+              <p className="mt-1 text-sm text-gray-600">현황이 바뀌면 실시간으로 표시됩니다.</p>
+            </div>
+            <button type="button" onClick={() => setShowAvailableOnly(false)}
+              className="h-11 rounded-xl bg-rb-600 px-5 text-sm font-bold text-white">
+              전체 방 보기
+            </button>
+          </div>
+        )}
+
+        {status && !availableOnlyActive && corners.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <p className="text-3xl">🎵</p>
             <p className="text-gray-600 text-sm">{activeFloor}층 정보가 없어요</p>
@@ -362,7 +431,11 @@ export default function HomePage() {
       </main>
 
       {/* ── 하단 버튼 ── */}
-      <div className="px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+24px)] space-y-2.5">
+      <div className={`px-4 pt-5 space-y-2.5 ${
+        activeBooking
+          ? 'pb-[calc(env(safe-area-inset-bottom)+104px)]'
+          : 'pb-[calc(env(safe-area-inset-bottom)+24px)]'
+      }`}>
         <div className="flex items-center justify-center w-full h-[88px] rounded-2xl bg-rb-600 text-white shadow-md">
           <time dateTime={now ? new Date(now).toISOString() : undefined}
             className="font-mono text-4xl font-bold tabular-nums tracking-wider" aria-label="현재 시각">
@@ -382,6 +455,39 @@ export default function HomePage() {
           </Link>
         </p>
       </div>
+
+      {activeBooking && (
+        <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setBookingRoom(activeBooking.room)}
+            aria-label={`${roomNum(activeBooking.room.name)}호 ${activeBooking.step === 'tag' ? '인증대기 예약' : '사용 중인 예약'} 열기`}
+            className={`pointer-events-auto mx-auto flex w-full max-w-md items-center gap-3 rounded-2xl border px-3.5 py-3 text-left shadow-[0_8px_30px_rgba(15,23,42,0.22)] active:scale-[0.98] transition-transform ${
+              activeBooking.step === 'tag'
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-rb-300 bg-rb-600'
+            }`}
+          >
+            <span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold ${
+              activeBooking.step === 'tag' ? 'bg-amber-200 text-amber-900' : 'bg-white/15 text-white'
+            }`}>
+              {activeBooking.step === 'tag' ? '인증대기' : '사용 중'}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={`block text-sm font-bold ${activeBooking.step === 'tag' ? 'text-amber-950' : 'text-white'}`}>
+                {roomNum(activeBooking.room.name)}호
+                {bookingPeriod(activeBooking) && <span className="ml-2 font-semibold">{bookingPeriod(activeBooking)}</span>}
+              </span>
+              <span className={`block truncate text-xs mt-0.5 ${activeBooking.step === 'tag' ? 'text-amber-800' : 'text-rb-100'}`}>
+                {activeBooking.step === 'tag' ? '현장 단말기에 학생증을 태그하세요' : '예약 상세 · 반납'}
+              </span>
+            </span>
+            <span className={`shrink-0 text-sm font-bold ${activeBooking.step === 'tag' ? 'text-amber-900' : 'text-white'}`}>
+              열기 ›
+            </span>
+          </button>
+        </div>
+      )}
 
       {bookingRoom && (
         <BookingSheet
