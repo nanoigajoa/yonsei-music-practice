@@ -104,7 +104,7 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reserve_payload["begin_hour"], "20")
         self.assertEqual(reserve_payload["begin_min"], "10")
         self.assertEqual(reserve_payload["finish_hour"], "22")
-        self.assertEqual(reserve_payload["finish_min"], "00")
+        self.assertEqual(reserve_payload["finish_min"], "10")
         self.assertEqual(reserve_payload["now_cell_time"], "20")
         self.assertEqual(reserve_payload["cell_min"], "10")
         self.assertEqual(reserve_payload["limit_time"], "120")

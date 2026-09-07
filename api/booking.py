@@ -151,11 +151,10 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 이 GET은 키오스크 세션/Referer 흐름을 유지하기 위해 계속 필요하다.
         b_hour, b_min = _next_ten_minute(now_cell, cell_min)
         start_total = int(b_hour) * 60 + int(b_min)
-        # 키오스크의 finish_*는 실제 종료 시각이 아니라 마지막 10분 칸의
-        # 시작 시각이다. 예를 들어 19:10부터 120분은 21:00 칸까지 선택하며,
-        # 실제 사용 종료는 21:10이다. 종료를 21:10으로 보내면 13번째 칸까지
-        # 선택한 것으로 해석되어 "최대 120분" 경계에서 거절된다.
-        finish_total = start_total + limit_time - 10
+        # finish_*는 예약의 실제 종료 시각이다. 예를 들어 10:10부터 120분은
+        # 12:10으로 전송해야 한다. 마지막 슬롯 시작 시각(12:00)을 보내면
+        # 키오스크가 110분 예약으로 확정한다.
+        finish_total = start_total + limit_time
 
         reserve_data = {
             "admin_mode": "", "corner_no": corner, "pc_id": pc_id, "quick": "",
