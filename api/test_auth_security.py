@@ -128,6 +128,21 @@ class BookingSecurityTest(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         mocked.assert_not_awaited()
 
+    def test_active_rehydrates_tagged_booking_without_kiosk_request(self):
+        reservations.acquire(id="active-one", uid="user-a", student_id="2022172528", student_key="student-a", corner_no=1,
+                             room_no="119")
+        record = reservations.finalize("active-one", start_at=datetime.now(), duration_min=60, kiosk_booking_no="kiosk-one")
+        reservations.set_status(record.id, "active")
+        token = issue_return_token("user-a", "2022172528", 1, "119", record.id)
+        with patch.object(main.booking, "active", AsyncMock()) as kiosk_active:
+            response = self.client.post("/booking/active", json={
+                "student_id": "2022172528", "corner_no": 1, "return_token": token,
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["active"])
+        self.assertEqual(response.json()["reservation"]["status"], "active")
+        kiosk_active.assert_not_awaited()
+
     def test_return_rejects_other_student_or_tampered_token(self):
         token = issue_return_token("user-a", "2022172528", 1, "119")
         wrong_student = self.client.post("/booking/return", json={

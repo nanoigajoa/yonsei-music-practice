@@ -426,7 +426,21 @@ async def active_booking(data: BookingActionRequest, user: dict = Depends(curren
     claims = verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
     _require_bound_student(user, data.student_id)
     record = reservations.open_for_uid(user["uid"])
-    if not record or record.id != claims.get("reservation") or record.status != "pending_tag":
+    if not record or record.id != claims.get("reservation"):
+        return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
+    # 태그 동기화 작업이 이미 active로 전환한 뒤에도 브라우저 localStorage에는
+    # 이전 tag 단계가 남아 있을 수 있다. 이 경우 키오스크를 다시 조회하지 않고
+    # 반납 화면을 복원한다.
+    if record.status == "active":
+        return {
+            "success": True,
+            "active": True,
+            "booking_no": record.kiosk_booking_no,
+            "room_no": record.room_no,
+            "message": f"태그 인증된 {record.room_no}호 사용을 확인했습니다.",
+            "reservation": _reservation_payload(record),
+        }
+    if record.status != "pending_tag":
         return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
     if kst_now() < record.start_at:
         return {
