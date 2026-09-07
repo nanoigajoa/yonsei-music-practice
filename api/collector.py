@@ -208,6 +208,7 @@ async def mark_reserved(corner_no: int, room_no: str, *, start_at: datetime,
         "start_at": start_at, "end_at": end_at, "tag_deadline": tag_deadline,
         "status": status, "reservation_id": reservation_id,
     }
+    _corner_versions[corner_no] = _corner_versions.get(corner_no, 0) + 1
     if _state is None:
         return
     async with _lock:
@@ -346,35 +347,34 @@ def _status_with_rooms(rooms: List[Room]) -> StatusResponse:
 async def _refresh_one_corner(corner_no: int) -> bool:
     """취소/반납한 방이 속한 코너만 원본에서 다시 읽는다."""
     global _state
-    # 전체 폴링과 직렬화해, 취소 전에 읽은 오래된 전체 결과가
-    # 취소 후의 코너 결과를 다시 덮어쓰지 못하게 한다.
-    async with _refresh_gate:
-        async with httpx.AsyncClient(headers=HEADERS) as client:
-            fetched = await _fetch_corner(client, corner_no)
-        if not fetched:
-            # 조회 실패를 공실로 오인하는 것보다 기존 상태 유지가 안전하다.
-            log.warning("corner_no=%d 즉시 갱신 실패 — 기존 상태 유지", corner_no)
+    # 전체 49개 폴링을 기다리지 않고 해당 코너를 바로 읽는다.
+    # 취소 전에 시작한 전체 폴링은 코너 세대 검사로 덮어쓰기를 막는다.
+    async with httpx.AsyncClient(headers=HEADERS) as client:
+        fetched = await _fetch_corner(client, corner_no)
+    if not fetched:
+        # 조회 실패를 공실로 오인하는 것보다 기존 상태 유지가 안전하다.
+        log.warning("corner_no=%d 즉시 갱신 실패 — 기존 상태 유지", corner_no)
+        return False
+
+    fetched = _apply_pending_overlays(fetched)
+    async with _lock:
+        if _state is None:
             return False
-
-        fetched = _apply_pending_overlays(fetched)
-        async with _lock:
-            if _state is None:
-                return False
-            rooms: List[Room] = []
-            inserted = False
-            for room in _state.rooms:
-                if room.corner_no != corner_no:
-                    rooms.append(room)
-                elif not inserted:
-                    rooms.extend(fetched)
-                    inserted = True
-            if not inserted:
+        rooms: List[Room] = []
+        inserted = False
+        for room in _state.rooms:
+            if room.corner_no != corner_no:
+                rooms.append(room)
+            elif not inserted:
                 rooms.extend(fetched)
-            _state = _status_with_rooms(rooms)
+                inserted = True
+        if not inserted:
+            rooms.extend(fetched)
+        _state = _status_with_rooms(rooms)
 
-        log.info("corner_no=%d 즉시 갱신 완료 | %d개", corner_no, len(fetched))
-        await _notify()
-        return True
+    log.info("corner_no=%d 즉시 갱신 완료 | %d개", corner_no, len(fetched))
+    await _notify()
+    return True
 
 
 async def _refresh_corner_until_current(corner_no: int) -> bool:
@@ -407,6 +407,9 @@ async def refresh_corner_now(corner_no: int) -> bool:
 async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
     global _state
     all_rooms: List[Room] = []
+    # 전체 조회 시작 후 취소/반납된 코너는 이 느린 결과로
+    # 덮지 않고, 즉시 갱신된 현재 상태를 보존한다.
+    versions_at_start = {corner_no: _corner_versions.get(corner_no, 0) for corner_no in corners}
 
     for corner_no in corners:
         rooms = await _fetch_corner(client, corner_no)
@@ -420,6 +423,26 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
     all_rooms = _apply_pending_overlays(all_rooms)
 
     async with _lock:
+        changed_corners = {
+            corner_no for corner_no, version in versions_at_start.items()
+            if _corner_versions.get(corner_no, 0) != version
+        }
+        if changed_corners and _state is not None:
+            current_by_corner = {
+                corner_no: [room for room in _state.rooms if room.corner_no == corner_no]
+                for corner_no in changed_corners
+            }
+            merged: List[Room] = []
+            inserted: Set[int] = set()
+            for room in all_rooms:
+                if room.corner_no not in changed_corners:
+                    merged.append(room)
+                elif room.corner_no not in inserted:
+                    merged.extend(current_by_corner.get(room.corner_no, []))
+                    inserted.add(room.corner_no)
+            for corner_no in changed_corners - inserted:
+                merged.extend(current_by_corner.get(corner_no, []))
+            all_rooms = merged
         _state = _status_with_rooms(all_rooms)
 
     log.info(

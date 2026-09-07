@@ -228,6 +228,62 @@ class CollectorImmediateReleaseTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(calls, 2)
 
+    async def test_slow_old_full_poll_cannot_overwrite_new_cancel_refresh(self):
+        self._set_state([self._room("119", occupied=True)])
+        full_started = asyncio.Event()
+        release_full = asyncio.Event()
+        calls = 0
+
+        async def fetch(_client, _corner_no: int):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                full_started.set()
+                await release_full.wait()
+                return [self._room("119", occupied=True)]
+            return [self._room("119")]
+
+        with patch.object(collector, "_fetch_corner", AsyncMock(side_effect=fetch)), patch.object(
+            collector, "INTER_CORNER_DELAY", 0
+        ):
+            full = asyncio.create_task(collector._refresh(SimpleNamespace(), [1]))
+            await full_started.wait()
+            await collector.clear_reserved(1, "119")
+            self.assertTrue(await collector.refresh_corner_now(1))
+            self.assertFalse(collector.get_state().rooms[0].occupied)
+            release_full.set()
+            await full
+
+        self.assertEqual(calls, 2)
+        self.assertFalse(collector.get_state().rooms[0].occupied)
+
+    async def test_slow_old_full_poll_cannot_overwrite_new_pending_reservation(self):
+        self._set_state([self._room("119")])
+        full_started = asyncio.Event()
+        release_full = asyncio.Event()
+
+        async def fetch(_client, _corner_no: int):
+            full_started.set()
+            await release_full.wait()
+            return [self._room("119")]
+
+        with patch.object(collector, "_fetch_corner", AsyncMock(side_effect=fetch)), patch.object(
+            collector, "INTER_CORNER_DELAY", 0
+        ):
+            full = asyncio.create_task(collector._refresh(SimpleNamespace(), [1]))
+            await full_started.wait()
+            now = collector.kst_now()
+            await collector.mark_reserved(
+                1, "119", start_at=now, end_at=now + timedelta(hours=2),
+                tag_deadline=now + timedelta(minutes=10), reservation_id="new-reservation",
+            )
+            release_full.set()
+            await full
+
+        room = collector.get_state().rooms[0]
+        self.assertTrue(room.occupied)
+        self.assertEqual(room.reservation_state, "pending_tag")
+
 
 if __name__ == "__main__":
     unittest.main()
