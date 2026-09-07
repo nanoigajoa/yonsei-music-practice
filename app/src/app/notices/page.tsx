@@ -1,3 +1,4 @@
+import { DailyReturnNotice } from '@/components/Announcements'
 import Link from 'next/link'
 import { AppMenu } from '@/components/AppMenu'
 
@@ -8,6 +9,7 @@ export default function NoticesPage() {
       <h1 className="text-2xl font-bold mt-3">공지사항</h1><p className="mt-1 text-sm text-rb-100">연습실 앱의 새 소식과 이용 안내</p>
     </header>
     <main className="p-5 space-y-4">
+      <DailyReturnNotice />
       <article className="rounded-2xl border border-gray-200 p-5">
         <time dateTime="2026-09-08" className="text-xs text-gray-500">2026.09.08</time>
         <h2 className="font-bold text-lg mt-2">라운지와 찜한 방 알림을 시작해요</h2>

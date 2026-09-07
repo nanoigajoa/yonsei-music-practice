@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Room } from '@/hooks/useRoomStatus'
+import { useAnnouncements } from '@/components/Announcements'
 import { auth } from '@/lib/firebase'
 import { bookingApiErrorMessage } from '@/lib/bookingApiError'
 import { bookingFailureReason, trackBookingEvent } from '@/lib/bookingAnalytics'
@@ -45,6 +46,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   onChanged: () => void
   onSessionChange: (booking: ActiveBooking | null) => void
 }) {
+  const { dailyEnabled } = useAnnouncements()
   const studentId = getStudentId()
   const durations = availableDurations(room)
   const [duration, setDuration] = useState(() => durations.includes(120) ? 120 : (durations[0] ?? 30))
@@ -134,9 +136,10 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     // 기존 예약을 새 실패 응답이 덮어쓰면 원래 방의 취소/태그 경로가 사라진다.
     if (data?.success && data.return_token) {
       setReturnToken(data.return_token)
-      setStep('tag')
+      const confirmedStep = data.reservation?.status === 'active' ? 'active' as const : 'tag' as const
+      setStep(confirmedStep)
       const active = {
-        room, returnToken: data.return_token, step: 'tag' as const, createdAt: Date.now(),
+        room, returnToken: data.return_token, reservationId: data.reservation?.id, step: confirmedStep, createdAt: Date.now(),
         startAt: data.reservation?.start_at, endAt: data.reservation?.end_at,
         tagDeadline: data.reservation?.tag_deadline,
       }
@@ -171,9 +174,9 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     if (data?.active) {
       setStep('active')
       const active = {
-        room, returnToken, step: 'active' as const,
+        room, returnToken, reservationId: data.reservation?.id ?? resumedBooking?.reservationId, step: 'active' as const,
         createdAt: resumedBooking?.createdAt ?? Date.now(),
-        startAt: resumedBooking?.startAt, endAt: resumedBooking?.endAt,
+        startAt: data.reservation?.start_at ?? resumedBooking?.startAt, endAt: data.reservation?.end_at ?? resumedBooking?.endAt,
         tagDeadline: resumedBooking?.tagDeadline,
       }
       saveActiveBooking(active)
@@ -193,7 +196,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     }, 'import')
     if (data?.success && data.return_token) {
       const active = {
-        room, returnToken: data.return_token, step: 'active' as const, createdAt: Date.now(),
+        room, returnToken: data.return_token, reservationId: data.reservation?.id, step: 'active' as const, createdAt: Date.now(),
         startAt: data.reservation?.start_at, endAt: data.reservation?.end_at,
       }
       setReturnToken(data.return_token)
@@ -210,8 +213,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
       student_id: studentId, corner_no: room.corner_no, return_token: returnToken,
     }, 'return')
     if (data?.success) {
-      clearActiveBooking()
-      onSessionChange(null)
+      if (clearActiveBooking(returnToken)) onSessionChange(null)
       setStep('returned')
       onChanged()
       trackBookingEvent('booking_returned')
@@ -223,11 +225,9 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     const data = await call('/booking/cancel', {
       student_id: studentId, corner_no: room.corner_no, return_token: returnToken,
     }, 'cancel')
-    if (data?.success || data?.message?.includes('찾지 못했습니다') || data?.message?.includes('활성 예약이 없습니다')) {
-      clearActiveBooking()
-      onSessionChange(null)
+    if (data?.success) {
+      if (clearActiveBooking(returnToken)) onSessionChange(null)
       setStep('returned')
-      if (!data?.success) setMessage('태그 시간이 지나 예약이 자동 취소되었습니다.')
       setError(false)
       onChanged()
       trackBookingEvent('booking_cancelled')
@@ -235,7 +235,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => { if (!loading) onClose() }}>
       <div className="w-full max-w-md rounded-t-3xl bg-white px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+20px)]"
         role="dialog" aria-modal="true" aria-labelledby="booking-sheet-title"
         onClick={(e) => e.stopPropagation()}>
@@ -255,19 +255,20 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
                 : '화면 표시와 관계없이 키오스크 원본을 다시 확인합니다.'}
             </p>
           </div>
-          <button onClick={onClose} aria-label="예약 창 닫기" className="h-11 w-11 rounded-full bg-gray-100 text-gray-500 text-xl">×</button>
+          <button onClick={() => { if (!loading) onClose() }} disabled={loading} aria-label="예약 창 닫기" className="h-11 w-11 rounded-full bg-gray-100 text-gray-500 text-xl">×</button>
         </div>
 
         {step === 'reserve' && <div className="mt-5 space-y-4">
           <label className="block">
             <span className="text-xs font-bold text-gray-600">예약 시간</span>
-            <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+            <select disabled={loading || !!requestId} value={duration} onChange={(e) => setDuration(Number(e.target.value))}
               className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base outline-none focus:border-rb-500">
               {durations.map((minutes) => <option key={minutes} value={minutes}>
                 {minutes < 60 ? `${minutes}분` : minutes === 60 ? '1시간' : minutes === 90 ? '1시간 30분' : '2시간'}
               </option>)}
             </select>
           </label>
+          {dailyEnabled && <p className="text-xs leading-5 text-rose-700">21:50 이전에 시작한 이용 예약은 남은 시간과 관계없이 21:50부터 자동 반납돼요.</p>}
           <button onClick={reserve} disabled={loading}
             className="h-14 w-full rounded-2xl bg-rb-600 font-bold text-white disabled:opacity-50">
             {loadingAction === 'reserve' ? '실시간 확인·예약 중...' : displayedAvailable ? `${number}호 예약하기` : '실시간 확인 후 예약하기'}
@@ -316,7 +317,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
 
         {step === 'returned' && <div className="mt-5 text-center">
           <p className="text-4xl">✅</p><p className="mt-2 text-lg font-bold">처리 완료</p>
-          <button onClick={onClose} className="mt-5 h-12 w-full rounded-2xl bg-gray-900 font-bold text-white">닫기</button>
+          <button onClick={() => { if (!loading) onClose() }} className="mt-5 h-12 w-full rounded-2xl bg-gray-900 font-bold text-white">닫기</button>
         </div>}
 
         {message && <p role="alert" aria-live="polite" className={`mt-3 rounded-xl px-3 py-2 text-center text-sm ${error ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>{message}</p>}

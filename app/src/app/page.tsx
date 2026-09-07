@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { AppMenu } from '@/components/AppMenu'
+import { auth } from '@/lib/firebase'
+import { COMMUNITY_API } from '@/lib/community'
 import { watchKey } from '@/lib/community'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
-import { ActiveBooking, getActiveBooking } from '@/lib/localBooking'
+import { ActiveBooking, getActiveBooking, clearActiveBooking, saveActiveBooking, getStudentId } from '@/lib/localBooking'
 import { isCurrentlyAvailable, isEndingSoon } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
@@ -133,6 +135,48 @@ export default function HomePage() {
     const id = setTimeout(() => setActiveBooking(getActiveBooking()), 0)
     return () => clearTimeout(id)
   }, [])
+
+  // Reconcile automatic returns without letting an old response erase a newer booking.
+  useEffect(() => {
+    if (!user || bookingRoom) return
+    let alive = true
+    let busy = false
+    const sync = async () => {
+      if (busy || document.visibilityState !== 'visible') return
+      const before = getActiveBooking()
+      setActiveBooking(before)
+      if (!before || !getStudentId()) return
+      busy = true
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch(`${COMMUNITY_API}/booking/current`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: getStudentId() }), signal: AbortSignal.timeout(10000),
+        })
+        if (!response.ok) return
+        const data = await response.json()
+        if (!alive || auth.currentUser?.uid !== user.uid || getActiveBooking()?.returnToken !== before.returnToken) return
+        if (data.success && data.found === false) {
+          if (clearActiveBooking(before.returnToken)) setActiveBooking(null)
+        } else if (data.success && data.found && data.return_token && data.reservation
+          && data.corner_no === before.room.corner_no
+          && data.room_no === roomNum(before.room.name)
+          && (!before.reservationId || data.reservation.id === before.reservationId)) {
+          const next: ActiveBooking = { ...before, reservationId: data.reservation.id,
+            returnToken: data.return_token, step: data.reservation.status === 'active' ? 'active' : 'tag',
+            startAt: data.reservation.start_at, endAt: data.reservation.end_at, tagDeadline: data.reservation.tag_deadline }
+          saveActiveBooking(next)
+          setActiveBooking(next)
+        }
+      } catch { /* Preserve the booking on an uncertain network response. */ }
+      finally { busy = false }
+    }
+    const initial = setTimeout(() => { void sync() }, 0)
+    const interval = setInterval(() => { void sync() }, 15000)
+    document.addEventListener('visibilitychange', sync)
+    window.addEventListener('storage', sync)
+    return () => { alive = false; clearTimeout(initial); clearInterval(interval); document.removeEventListener('visibilitychange', sync); window.removeEventListener('storage', sync) }
+  }, [user, bookingRoom])
 
   const updatedAt = status?.updated_at
     ? (() => {
@@ -476,7 +520,7 @@ export default function HomePage() {
           }
           onClose={() => setBookingRoom(null)}
           onChanged={refresh}
-          onSessionChange={setActiveBooking}
+          onSessionChange={() => setActiveBooking(getActiveBooking())}
         />
       )}
 

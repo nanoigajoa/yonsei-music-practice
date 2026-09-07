@@ -14,6 +14,7 @@ export type ActiveBookingStep = 'tag' | 'active'
 export interface ActiveBooking {
   room: Room
   returnToken: string
+  reservationId?: string
   step: ActiveBookingStep
   createdAt: number
   startAt?: string
@@ -73,8 +74,10 @@ export function saveActiveBooking(value: ActiveBooking) {
   localStorage.setItem(ACTIVE_BOOKING_KEY, JSON.stringify(value))
 }
 
-export function clearActiveBooking() {
+export function clearActiveBooking(expectedToken?: string): boolean {
+  if (expectedToken && getActiveBooking()?.returnToken !== expectedToken) return false
   localStorage.removeItem(ACTIVE_BOOKING_KEY)
+  return true
 }
 
 export function getPendingBookingRequest(): PendingBookingRequest | null {
