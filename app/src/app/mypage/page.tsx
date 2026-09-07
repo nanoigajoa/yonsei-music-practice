@@ -181,7 +181,7 @@ function GoogleIcon() {
 // ── 메인 페이지 ────────────────────────────────────────
 export default function MyPage() {
   const { user, linkGoogle, restoreWithGoogle, isLinked, linkedEmail } = useAnonymousAuth()
-  const { profile, isNew, suggestedNickname, rerollNickname, saveProfile, saveNotifySettings } = useUserProfile(user)
+  const { profile, isNew, suggestedNickname, rerollNickname, saveProfile } = useUserProfile(user)
 
   const [period,      setPeriod]      = useState<Period>('weekly')
   const [myData,      setMyData]      = useState<RankingsData['myRank'] | null>(null)
@@ -375,33 +375,9 @@ export default function MyPage() {
           </button>
         </div>
 
-        {/* ── 알림 설정 ── */}
-        {profile && (
-          <div className="rounded-2xl bg-gray-50 border-2 border-gray-100 px-4 py-3.5 space-y-3">
-            <p className="text-sm font-bold text-gray-800">알림 설정</p>
-            {[
-              { key: 'notifyTag',    label: '태그 알림',    desc: '예약 후 5분·2분 전 카드 태그 알림' },
-              { key: 'notifyExtend', label: '연장 리마인더', desc: '종료 40분 전 알림' },
-              { key: 'notifyReturn', label: '반납 리마인더', desc: '종료 10분 전 알림' },
-            ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{label}</p>
-                  <p className="text-xs text-gray-400">{desc}</p>
-                </div>
-                <button
-                  onClick={() => saveNotifySettings({ [key]: !profile[key as keyof typeof profile] })}
-                  className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors overflow-hidden ${
-                    profile[key as keyof typeof profile] ? 'bg-rb-600' : 'bg-gray-300'
-                  }`}>
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    profile[key as keyof typeof profile] ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <Link href="/alarm" className="block rounded-2xl bg-rb-50 border border-rb-200 p-4 text-rb-800">
+          <p className="font-bold text-sm">찜·알림 설정 →</p><p className="text-xs mt-1">권한 확인 · 테스트 알림 · 태그·반납 알림</p>
+        </Link>
 
       </main>
 
@@ -412,7 +388,7 @@ export default function MyPage() {
             className="w-full h-13 rounded-2xl bg-rb-600 text-white text-sm font-bold active:scale-[0.98] transition-all shadow-md">
             ✏️ 연습 기록 직접 입력
           </button>
-          <p className="text-center text-xs text-gray-400 mt-1.5">알림 등록 시 연습 기록이 자동으로 쌓여요</p>
+          <p className="text-center text-xs text-gray-400 mt-1.5">연습 기록을 직접 남길 수 있어요</p>
         </div>
       </div>
 

@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { NotificationBanner } from '@/components/NotificationBanner'
+import { useCommunity } from '@/components/CommunityProvider'
+import { SUPPORT_URL, watchKey } from '@/lib/community'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
@@ -71,7 +73,7 @@ function RoomChip({ room, now, onReserve }: { room: Room; now: number | null; on
     const pendingTag = room.reservation_state === 'pending_tag'
     return (
       <button onClick={() => onReserve(room)}
-        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${endingSoon ? 'bg-rose-100 border-2 border-rose-500' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
+        className={`w-full rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${endingSoon ? 'bg-rose-100 border-2 border-rose-500' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
         <div className={`w-1.5 h-1.5 rounded-full ${endingSoon ? 'bg-rose-600' : pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
         <span className={`text-xs font-bold leading-none mt-0.5 ${endingSoon ? 'text-rose-900' : pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
         {isOrgan && <span className={`text-[9px] ${endingSoon ? 'text-rose-700' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
@@ -87,7 +89,7 @@ function RoomChip({ room, now, onReserve }: { room: Room; now: number | null; on
   if (period) {
     return (
       <button onClick={() => onReserve(room)}
-        className="rounded-xl bg-emerald-50 border-2 border-emerald-300 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+        className="w-full rounded-xl bg-emerald-50 border-2 border-emerald-300 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span className="text-xs font-bold text-emerald-800 leading-none mt-0.5">{num}호</span>
         {isOrgan && <span className="text-[9px] text-emerald-700 leading-none">오르간</span>}
@@ -99,7 +101,7 @@ function RoomChip({ room, now, onReserve }: { room: Room; now: number | null; on
   // 가용 여부를 판단할 정보가 없는 방은 상태 문구 없이 표시한다.
   return (
     <button onClick={() => onReserve(room)}
-      className="rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+      className="w-full rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
       <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
       {isOrgan && <span className="text-[9px] text-gray-500 leading-none">오르간</span>}
@@ -113,6 +115,8 @@ export default function HomePage() {
   const { user } = useAnonymousAuth()
   const { profile, isNew, suggestedNickname, rerollNickname, saveProfile } = useUserProfile(user)
   const { status, connState, byFloor, refresh, refreshing } = useRoomStatus()
+  const notifications = useCommunity()
+  const openedNotification = useRef<string | null>(null)
 
   const [activeFloor, setActiveFloor]   = useState(1)
   const [now, setNow] = useState<number | null>(null)
@@ -141,6 +145,30 @@ export default function HomePage() {
     : null
   const floorData   = byFloor[activeFloor] ?? {}
   const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
+
+  useEffect(() => {
+    if (!status) return
+    const key = new URLSearchParams(window.location.search).get('room')
+    if (!key || openedNotification.current === key) return
+    const room = status.rooms.find(r => watchKey(r) === key)
+    if (!room) return
+    openedNotification.current = key
+    const timer = setTimeout(() => { setActiveFloor(room.floor); setShowAvailableOnly(false) }, 0)
+    return () => clearTimeout(timer)
+  }, [status])
+
+  function roomCard(room: Room) {
+    const key = watchKey(room)
+    const watched = notifications.data?.watches.some(w => w.room_key === key) ?? false
+    return <div key={key} className="relative">
+      <RoomChip room={room} now={now} onReserve={openBooking} />
+      <button type="button" aria-label={`${roomNum(room.name)}호 ${watched ? '찜 해제' : '공실 알림 찜하기'}`} aria-pressed={watched}
+        disabled={notifications.busy || !notifications.data} onClick={() => void notifications.toggleWatch(room)}
+        className={`absolute -top-2 -right-1 h-8 w-8 rounded-full border shadow-sm text-lg leading-none flex items-center justify-center disabled:opacity-40 ${watched ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+        {watched ? '★' : '☆'}
+      </button>
+    </div>
+  }
 
   function openBooking(room: Room) {
     if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
@@ -252,6 +280,13 @@ export default function HomePage() {
 
       {/* ── 알림 배너 ── */}
       <NotificationBanner user={user} />
+      <nav aria-label="커뮤니티와 알림" className="grid grid-cols-3 gap-2 px-4 py-3">
+        <Link href="/lounge" className="rounded-xl bg-rb-600 py-3 text-center text-xs font-bold text-white">음대 라운지</Link>
+        <Link href="/alarm" className="rounded-xl bg-rb-50 py-3 text-center text-xs font-bold text-rb-700">찜·알림 설정</Link>
+        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-[#FEE500] py-3 text-center text-xs font-bold text-[#191919]">운영자 문의 ↗</a>
+      </nav>
+      {notifications.notice && <p role="status" className="mx-4 mb-2 text-xs text-emerald-800">{notifications.notice} <Link href="/alarm" className="underline">알림 설정</Link></p>}
+      {notifications.error && <p role="alert" className="mx-4 mb-2 text-xs text-rose-800">찜·알림 연결을 확인해 주세요. <Link href="/alarm" className="underline">설정 확인</Link></p>}
 
       {/* ── 층 탭 ── */}
       {availableOnlyActive ? (
@@ -336,9 +371,7 @@ export default function HomePage() {
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} now={now} onReserve={openBooking} />
-                ))}
+                {rooms.map(roomCard)}
               </div>
             </section>
           )
@@ -355,9 +388,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {rooms.map((room) => (
-                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} now={now} onReserve={openBooking} />
-              ))}
+              {rooms.map(roomCard)}
             </div>
           </section>
         ))}

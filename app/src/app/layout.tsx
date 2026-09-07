@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { AuthGate } from '@/components/AuthGate'
+import { CommunityProvider } from '@/components/CommunityProvider'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 
@@ -45,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className="min-h-full font-sans antialiased">
-        <AuthGate>{children}</AuthGate>
+        <AuthGate><CommunityProvider>{children}</CommunityProvider></AuthGate>
       </body>
       
       {/* Google Analytics */}
