@@ -183,12 +183,15 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 그대로 보존해, 화면에서 직접 누른 예약과 같은 요청을 만든다.
         b_hour, b_min = _next_ten_minute(now_cell, cell_min)
         start_total = int(b_hour) * 60 + int(b_min)
-        # 학교 키오스크의 finish_*는 실제 종료 시각이 아니라 마지막 10분 칸의
-        # *시작* 시각이다. 즉 10:10부터 120분은 10:10~12:00의 12개 칸을
-        # 선택하고, 12:00~12:10 마지막 칸까지 포함해 12:10에 끝난다.
-        # finish를 12:10으로 보내면 13번째 칸까지 선택한 130분으로 계산되어
-        # "최대 120분" 오류가 난다.
-        finish_total = start_total + limit_time - 10
+        # 화면과 실제 점유 종료는 요청 시간 그대로 계산한다. 10:10부터
+        # 120분이면 반드시 12:10에 끝나야 하므로 마지막 10분 칸으로 줄이지
+        # 않는다.
+        finish_total = start_total + limit_time
+        now = kst_now()
+        start_at = now.replace(hour=int(b_hour), minute=int(b_min), second=0, microsecond=0)
+        if start_at < now - timedelta(minutes=10):
+            start_at += timedelta(days=1)
+        end_at = start_at + timedelta(minutes=limit_time)
 
         native_values = _native_form_values(form.text)
         reserve_data = {
@@ -198,9 +201,12 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             # 이 세 값은 동일한 첫 10분 칸을 가리켜야 한다. 목록의 실제 분
             # (예: 10:04)을 그대로 쓰면 학교가 126분으로 계산할 수 있다.
             "limit_time": str(limit_time), "now_cell_time": b_hour, "cell_min": b_min,
-            # 구형 키오스크 폼의 stime/etime은 브라우저에서 빈 값으로 전송된다.
-            # 서버가 만든 잔여 문자열을 보존하면 시간 계산이 달라질 수 있다.
-            "stime": "", "etime": "",
+            # 학교 서버의 최대시간 검사는 끝 경계를 포함하는 방식이다. 실제
+            # 예약칸은 12:10까지 유지하되, 검사용 숨은 종료값은 바로 전 초인
+            # 12:09:59로 보내면 120분 미만으로 비교된다. 키오스크 화면에서
+            # 2시간을 직접 고를 때와 같은 반열림 구간 [start, end) 표현이다.
+            "stime": start_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "etime": (end_at - timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S"),
             "begin_hour": b_hour, "begin_min": b_min,
             "finish_hour": str(finish_total // 60), "finish_min": f"{finish_total % 60:02d}",
         }
@@ -236,11 +242,6 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         error = re.search(r"msg=([^\"&]+)", result.text)
         if error:
             return {"success": False, "message": unquote(error.group(1))}
-        now = kst_now()
-        start_at = now.replace(hour=int(b_hour), minute=int(b_min), second=0, microsecond=0)
-        # 자정을 넘기는 예약도 키오스크가 허용하는 경우를 보존한다.
-        if start_at < now - timedelta(minutes=10):
-            start_at += timedelta(days=1)
         booking_no = await _pending_booking_no(client, corner_no, room_no)
         return {
             "success": True, "message": f"실시간 확인 및 {room_no}호 예약 완료",

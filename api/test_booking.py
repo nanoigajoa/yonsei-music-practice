@@ -122,7 +122,7 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reserve_payload["begin_hour"], "20")
         self.assertEqual(reserve_payload["begin_min"], "10")
         self.assertEqual(reserve_payload["finish_hour"], "22")
-        self.assertEqual(reserve_payload["finish_min"], "00")
+        self.assertEqual(reserve_payload["finish_min"], "10")
         self.assertEqual(reserve_payload["now_cell_time"], "20")
         self.assertEqual(reserve_payload["cell_min"], "10")
         self.assertEqual(reserve_payload["limit_time"], "120")
@@ -146,11 +146,11 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         payload = client.post.await_args_list[1].kwargs["data"]
         self.assertEqual(payload["native_token"], "kiosk-generated-token")
-        self.assertEqual(payload["stime"], "")
+        self.assertEqual(payload["stime"], "2026-09-07 20:10:00")
         self.assertEqual((payload["now_cell_time"], payload["cell_min"]), ("20", "10"))
         self.assertEqual((payload["begin_hour"], payload["begin_min"]), ("20", "10"))
-        self.assertEqual((payload["finish_hour"], payload["finish_min"]), ("22", "00"))
-        self.assertEqual((payload["stime"], payload["etime"]), ("", ""))
+        self.assertEqual((payload["finish_hour"], payload["finish_min"]), ("22", "10"))
+        self.assertEqual((payload["stime"], payload["etime"]), ("2026-09-07 20:10:00", "2026-09-07 22:09:59"))
         self.assertEqual(client.post.await_count, 2)  # login 1회 + 예약 전송 1회
 
     async def test_reserve_retries_once_only_after_explicit_kiosk_login_failure(self):
