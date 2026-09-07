@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
@@ -8,7 +8,7 @@ import { NotificationBanner } from '@/components/NotificationBanner'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
-import { ActiveBooking, getActiveBooking } from '@/lib/localBooking'
+import { ActiveBooking, getActiveBooking, getStudentId, saveActiveBooking } from '@/lib/localBooking'
 import { isCurrentlyAvailable } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
@@ -24,6 +24,10 @@ const CONN_COLOR: Record<string, string> = {
   connecting: 'text-white',
   error:      'text-white',
 }
+
+const BOOKING_API_URL = process.env.NEXT_PUBLIC_BOOKING_API_URL
+  ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
+  ?? 'http://localhost:8000'
 
 // ── 운영 시간 판별 (07:00–22:00) ──────────────────────────
 function isOperatingHours(now: Date = new Date()): boolean {
@@ -135,6 +139,8 @@ export default function HomePage() {
   const [bookingRoom, setBookingRoom] = useState<Room | null>(null)
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null)
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
+  const initialRecoveryUser = useRef<string | null>(null)
+  const recoveryInFlight = useRef<Promise<ActiveBooking | null> | null>(null)
 
   // 운영 시간 표시 갱신
   useEffect(() => {
@@ -159,10 +165,68 @@ export default function HomePage() {
   const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
   const operating   = now !== null && isOperatingHours(new Date(now))
 
-  function openBooking(room: Room) {
+  const recoverCurrentBooking = useCallback(async (): Promise<ActiveBooking | null> => {
+    if (activeBooking) return activeBooking
+    if (!user || !status) return null
+    if (recoveryInFlight.current) return recoveryInFlight.current
+    const studentId = getStudentId()
+    if (!studentId) return null
+
+    const request = (async () => {
+      try {
+        const idToken = await user.getIdToken()
+        const response = await fetch(`${BOOKING_API_URL}/booking/current`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ student_id: studentId }),
+        })
+        if (!response.ok) return null
+        const data = await response.json()
+        if (!data.found || data.pending || !data.return_token || !data.reservation) return null
+        const room = status.rooms.find((candidate) =>
+          candidate.corner_no === data.corner_no && roomNum(candidate.name) === data.room_no)
+        if (!room) return null
+        const restored: ActiveBooking = {
+          room,
+          returnToken: data.return_token,
+          step: data.reservation.status === 'active' ? 'active' : 'tag',
+          createdAt: Date.now(),
+          startAt: data.reservation.start_at,
+          endAt: data.reservation.end_at,
+          tagDeadline: data.reservation.tag_deadline,
+        }
+        saveActiveBooking(restored)
+        setActiveBooking(restored)
+        return restored
+      } catch {
+        return null
+      }
+    })()
+    recoveryInFlight.current = request
+    try {
+      return await request
+    } finally {
+      if (recoveryInFlight.current === request) recoveryInFlight.current = null
+    }
+  }, [activeBooking, status, user])
+
+  useEffect(() => {
+    if (!user || !status || activeBooking || initialRecoveryUser.current === user.uid) return
+    initialRecoveryUser.current = user.uid
+    void recoverCurrentBooking()
+  }, [activeBooking, recoverCurrentBooking, status, user])
+
+  async function openBooking(room: Room) {
     if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
       setBookingRoom(activeBooking.room)
       return
+    }
+    if (!activeBooking) {
+      const restored = await recoverCurrentBooking()
+      if (restored) {
+        setBookingRoom(restored.room)
+        return
+      }
     }
     setBookingRoom(room)
   }

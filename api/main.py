@@ -240,6 +240,10 @@ class BookingResultRequest(BaseModel):
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
+class CurrentBookingRequest(BaseModel):
+    student_id: str = Field(pattern=r"^20\d{8}$")
+
+
 def _result_for_existing_request(record: reservations.Reservation, user: dict, student_id: str) -> dict:
     """이미 처리 중이거나 완료된 동일 요청의 현재 결과를 안전하게 복원한다."""
     if record.status == "creating":
@@ -448,6 +452,30 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
             reservations.fail(intent.id)
             # 동시 요청 사이에 같은 사용자의 예약이 만들어진 경우다.
             raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/booking/current")
+async def current_booking(data: CurrentBookingRequest, user: dict = Depends(current_user)):
+    """브라우저 저장소가 사라져도 서버가 알고 있는 진행 예약을 복원한다."""
+    _require_bound_student(user, data.student_id)
+    record = reservations.open_for_uid(user["uid"])
+    if record is None:
+        return {"success": True, "found": False, "message": "진행 중인 예약이 없습니다."}
+    if record.status == "creating":
+        return {
+            "success": True, "found": True, "pending": True,
+            "room_no": record.room_no, "corner_no": record.corner_no,
+            "message": "예약 요청을 처리 중입니다.",
+        }
+    return {
+        "success": True, "found": True, "pending": False,
+        "room_no": record.room_no, "corner_no": record.corner_no,
+        "return_token": issue_return_token(
+            user["uid"], data.student_id, record.corner_no, record.room_no, record.id,
+        ),
+        "reservation": _reservation_payload(record),
+        "message": f"진행 중인 {record.room_no}호 예약을 불러왔습니다.",
+    }
 
 
 @app.post("/booking/reserve-result")

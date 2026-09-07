@@ -144,6 +144,35 @@ class BookingSecurityTest(unittest.TestCase):
         self.assertEqual(response.json()["reservation"]["status"], "active")
         kiosk_active.assert_not_awaited()
 
+    def test_current_booking_restores_pending_reservation_without_kiosk_request(self):
+        start = datetime.now() + timedelta(minutes=10)
+        reservations.acquire(
+            id="pending-current", uid="user-a", student_id="2022172528",
+            student_key=student_key("2022172528"), corner_no=4, room_no="408",
+        )
+        record = reservations.finalize(
+            "pending-current", start_at=start, duration_min=120, kiosk_booking_no="kiosk-current",
+        )
+
+        response = self.client.post("/booking/current", json={"student_id": "2022172528"})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["found"])
+        self.assertFalse(data["pending"])
+        self.assertEqual(data["room_no"], "408")
+        self.assertEqual(data["corner_no"], 4)
+        self.assertEqual(data["reservation"]["status"], "pending_tag")
+        self.assertTrue(data["return_token"])
+        self.assertEqual(reservations.get(record.id).status, "pending_tag")
+
+    def test_current_booking_returns_empty_without_creating_school_request(self):
+        response = self.client.post("/booking/current", json={"student_id": "2022172528"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        self.assertFalse(response.json()["found"])
+
     def test_return_rejects_other_student_or_tampered_token(self):
         token = issue_return_token("user-a", "2022172528", 1, "119")
         wrong_student = self.client.post("/booking/return", json={
