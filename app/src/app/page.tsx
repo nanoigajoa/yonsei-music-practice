@@ -9,7 +9,7 @@ import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
 import { ActiveBooking, getActiveBooking } from '@/lib/localBooking'
-import { isCurrentlyAvailable } from '@/lib/roomAvailability'
+import { isCurrentlyAvailable, isEndingSoon } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
 const CONN_BADGE: Record<string, string> = {
@@ -61,23 +61,23 @@ function bookingPeriod(booking: ActiveBooking) {
 }
 
 // ── 방 칩 ────────────────────────────────────────────────
-function RoomChip({ room, onReserve }: { room: Room; onReserve: (room: Room) => void }) {
+function RoomChip({ room, now, onReserve }: { room: Room; now: number | null; onReserve: (room: Room) => void }) {
   const num     = roomNum(room.name)
   const isOrgan = room.name.includes('오르간')
   const period  = room.available_periods[0]
 
   if (room.occupied) {
-    const handover = room.handover === true
+    const endingSoon = isEndingSoon(room, now)
     const pendingTag = room.reservation_state === 'pending_tag'
     return (
       <button onClick={() => onReserve(room)}
-        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${handover ? 'bg-gray-100 border-2 border-gray-300' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
-        <div className={`w-1.5 h-1.5 rounded-full ${handover ? 'bg-gray-400' : pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
-        <span className={`text-xs font-bold leading-none mt-0.5 ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
-        {isOrgan && <span className={`text-[9px] ${handover ? 'text-gray-500' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
-        <span className={`text-[10px] leading-none ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
-          {pendingTag ? '인증대기' : handover
-            ? room.occupied_until ? `${room.occupied_until}부터 가능` : '곧 가능'
+        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${endingSoon ? 'bg-rose-100 border-2 border-rose-500' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${endingSoon ? 'bg-rose-600' : pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
+        <span className={`text-xs font-bold leading-none mt-0.5 ${endingSoon ? 'text-rose-900' : pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
+        {isOrgan && <span className={`text-[9px] ${endingSoon ? 'text-rose-700' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
+        <span className={`text-[10px] leading-none ${endingSoon ? 'text-rose-900' : pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
+          {pendingTag ? '인증대기' : endingSoon
+            ? `${room.occupied_until} 종료`
             : room.occupied_until ? `사용중 ~${room.occupied_until}` : '사용중'}
         </span>
       </button>
@@ -96,15 +96,13 @@ function RoomChip({ room, onReserve }: { room: Room; onReserve: (room: Room) => 
     )
   }
 
-  // 운영 중이지만 가용 슬롯이 없고, 곧 빈다는 근거도 없는 상태.
-  // 회색은 반드시 '곧 가능'이라는 뜻으로만 사용한다.
+  // 가용 여부를 판단할 정보가 없는 방은 상태 문구 없이 표시한다.
   return (
     <button onClick={() => onReserve(room)}
-      className="rounded-xl bg-violet-50 border-2 border-violet-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
-      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-      <span className="text-xs font-bold text-violet-800 leading-none mt-0.5">{num}호</span>
-      {isOrgan && <span className="text-[9px] text-violet-600 leading-none">오르간</span>}
-      <span className="text-[10px] text-violet-700 leading-none">현황 확인</span>
+      className="rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+      <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+      <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
+      {isOrgan && <span className="text-[9px] text-gray-500 leading-none">오르간</span>}
     </button>
   )
 }
@@ -339,7 +337,7 @@ export default function HomePage() {
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} onReserve={openBooking} />
+                  <RoomChip key={room.name} room={room} now={now} onReserve={openBooking} />
                 ))}
               </div>
             </section>
@@ -358,7 +356,7 @@ export default function HomePage() {
             </div>
             <div className="grid grid-cols-4 gap-2">
               {rooms.map((room) => (
-                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} onReserve={openBooking} />
+                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} now={now} onReserve={openBooking} />
               ))}
             </div>
           </section>
@@ -391,8 +389,7 @@ export default function HomePage() {
             {[
               { dot: 'bg-emerald-400', label: '공실' },
               { dot: 'bg-rb-400',      label: '사용중' },
-              { dot: 'bg-gray-400',    label: '표시 시각부터 가능' },
-              { dot: 'bg-violet-400',  label: '현황 확인' },
+              { dot: 'bg-rose-600',    label: '두칸남음' },
             ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1.5 text-xs text-gray-700">
                 <span className={`w-2 h-2 rounded-full ${dot}`} />
