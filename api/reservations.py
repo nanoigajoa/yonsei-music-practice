@@ -77,6 +77,18 @@ def _connection():
     if "dispatch_started" not in columns:
         # NULL은 배포 전 코드가 남긴 전송 여부 불명 기록이다.
         conn.execute("ALTER TABLE reservations ADD COLUMN dispatch_started INTEGER")
+    if "booking_source" not in columns:
+        conn.execute("ALTER TABLE reservations ADD COLUMN booking_source TEXT NOT NULL DEFAULT 'unknown'")
+        # Only positively identified app requests are eligible; legacy imports remain unknown.
+        conn.execute("UPDATE reservations SET booking_source='app' WHERE request_id IS NOT NULL OR dispatch_started=1")
+    if "active_at" not in columns:
+        conn.execute("ALTER TABLE reservations ADD COLUMN active_at TEXT")
+        conn.execute("UPDATE reservations SET active_at=? WHERE status='active'", (kst_now().isoformat(),))
+    conn.execute("""CREATE TABLE IF NOT EXISTS daily_return_batches (
+        cutoff TEXT PRIMARY KEY, captured_at TEXT NOT NULL)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS daily_return_targets (
+        cutoff TEXT NOT NULL, reservation_id TEXT NOT NULL, booking_no TEXT NOT NULL,
+        PRIMARY KEY(cutoff, reservation_id))""")
     if "daily_return_attempt_at" not in columns:
         conn.execute("ALTER TABLE reservations ADD COLUMN daily_return_attempt_at REAL")
     if "returned_at" not in columns:
@@ -253,12 +265,14 @@ def open_reservations() -> list[Reservation]:
 
 
 def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: int, room_no: str,
-            request_id: str | None = None, duration_min: int = 120) -> Reservation:
+            request_id: str | None = None, duration_min: int = 120, booking_source: str = "app") -> Reservation:
     """키오스크 호출 전에 학번과 방을 함께 선점한다.
 
     BEGIN IMMEDIATE가 단일 게이트웨이의 동시 요청을 직렬화한다. UID가 아니라
     student_key로 검사하므로 다른 기기/Google 계정도 같은 학생으로 취급한다.
     """
+    if booking_source not in {"app", "kiosk"}:
+        raise ValueError("invalid booking source")
     now = kst_now()
     placeholders = ",".join("?" for _ in OPEN_STATUSES)
     with _connection() as conn:
@@ -289,10 +303,10 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
             raise ReservationConflict("방금 다른 사용자가 이 방을 예약했습니다. 다른 방을 선택해 주세요.")
         try:
             conn.execute("""INSERT INTO reservations
-                (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at, duration_min, dispatch_started)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?, ?, 0)""", (
+                (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at, duration_min, dispatch_started, booking_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?, ?, 0, ?)""", (
                     id, uid, student_id, student_key, corner_no, room_no,
-                    now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(), duration_min,
+                    now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(), duration_min, booking_source,
                 ))
         except sqlite3.IntegrityError as exc:
             raise ReservationConflict("이미 처리된 예약 요청입니다. 기존 요청의 결과를 확인해 주세요.") from exc
@@ -309,10 +323,11 @@ def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no
     deadline = start_at + timedelta(minutes=10)
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        updated = conn.execute("""UPDATE reservations SET start_at=?, end_at=?, tag_deadline=?, status=?, kiosk_booking_no=?
+        updated = conn.execute("""UPDATE reservations SET start_at=?, end_at=?, tag_deadline=?, status=?, kiosk_booking_no=?,
+                      active_at=CASE WHEN ?='active' THEN COALESCE(active_at,?) ELSE active_at END
                       WHERE id=? AND status IN ('creating','submitting','uncertain')
                       AND (dispatch_started IS NULL OR dispatch_started=0 OR (start_at=? AND duration_min=?))""",
-                     (start_at.isoformat(), end_at.isoformat(), deadline.isoformat(), status, kiosk_booking_no, id,
+                     (start_at.isoformat(), end_at.isoformat(), deadline.isoformat(), status, kiosk_booking_no, status, kst_now().isoformat(), id,
                       start_at.isoformat(), duration_min)).rowcount
         if updated != 1:
             raise ValueError("저장된 예약 계획과 일치하지 않아 확정하지 않았습니다.")
@@ -332,8 +347,9 @@ def fail(id: str) -> None:
 def set_status(id: str, status: str) -> Reservation | None:
     with _connection() as conn:
         conn.execute("""UPDATE reservations SET status=?,
+                     active_at=CASE WHEN ?='active' THEN COALESCE(active_at,?) ELSE active_at END,
                      returned_at=CASE WHEN ?='returned' AND status='active' THEN COALESCE(returned_at,?) ELSE returned_at END
-                     WHERE id=?""", (status, status, kst_now().isoformat(), id))
+                     WHERE id=?""", (status, status, kst_now().isoformat(), status, kst_now().isoformat(), id))
         row = conn.execute("SELECT * FROM reservations WHERE id=?", (id,)).fetchone()
     return _row(row)
 
@@ -342,7 +358,9 @@ def transition(id: str, *, expected_status: str, status: str) -> Reservation | N
     """현재 상태가 기대값일 때만 전이한다 (동시 취소/반납과의 경합 방지)."""
     with _connection() as conn:
         updated = conn.execute(
-            "UPDATE reservations SET status=? WHERE id=? AND status=?", (status, id, expected_status)
+            """UPDATE reservations SET status=?,
+                active_at=CASE WHEN ?='active' THEN COALESCE(active_at,?) ELSE active_at END
+                WHERE id=? AND status=?""", (status, status, kst_now().isoformat(), id, expected_status)
         ).rowcount
         if updated != 1:
             return None
@@ -448,9 +466,11 @@ def claim_daily_return(id: str, booking_no: str, now: datetime) -> bool:
     """Persist retry throttling; only claim the original active reservation."""
     with _connection() as conn:
         return conn.execute("""UPDATE reservations SET daily_return_attempt_at=?
-            WHERE id=? AND kiosk_booking_no=? AND status='active'
+            WHERE id=? AND kiosk_booking_no=? AND status IN ('active','ended')
+            AND EXISTS (SELECT 1 FROM daily_return_targets t
+                WHERE t.reservation_id=reservations.id AND t.booking_no=reservations.kiosk_booking_no AND t.cutoff=?)
             AND (daily_return_attempt_at IS NULL OR daily_return_attempt_at<=?)""",
-            (now.timestamp(), id, booking_no, now.timestamp()-30)).rowcount == 1
+            (now.timestamp(), id, booking_no, now.replace(hour=21, minute=50, second=0, microsecond=0).isoformat(), now.timestamp()-30)).rowcount == 1
 
 
 def confirm_daily_return(id: str, booking_no: str) -> None:
@@ -459,3 +479,31 @@ def confirm_daily_return(id: str, booking_no: str) -> None:
         conn.execute("""UPDATE reservations SET status='returned', returned_at=COALESCE(returned_at,?)
             WHERE id=? AND kiosk_booking_no=? AND status IN ('active','ended')""",
             (kst_now().isoformat(), id, booking_no))
+
+
+def daily_return_snapshot(now: datetime) -> list[Reservation]:
+    """Freeze the 21:50 cohort once per day, including an empty cohort, across restarts."""
+    now = kst_normalize(now)
+    cutoff = now.replace(hour=21, minute=50, second=0, microsecond=0)
+    if not cutoff <= now < now.replace(hour=22, minute=0, second=0, microsecond=0):
+        return []
+    with _connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        created = conn.execute("INSERT OR IGNORE INTO daily_return_batches VALUES (?,?)",
+                               (cutoff.isoformat(), now.isoformat())).rowcount
+        if created:
+            # active_at is the time tag confirmation was recorded, not planned start_at.
+            # Include records expired locally at the cutoff; school identity is rechecked.
+            conn.execute("""INSERT INTO daily_return_targets
+                SELECT ?, id, kiosk_booking_no FROM reservations
+                WHERE booking_source='app' AND active_at<=? AND returned_at IS NULL
+                AND (status='active' OR (status='ended' AND end_at>=?))
+                AND kiosk_booking_no IS NOT NULL AND kiosk_booking_no!='' AND student_id!=''""",
+                (cutoff.isoformat(), cutoff.isoformat(), cutoff.isoformat()))
+            conn.execute("DELETE FROM daily_return_targets WHERE cutoff<?", ((cutoff-timedelta(days=7)).isoformat(),))
+            conn.execute("DELETE FROM daily_return_batches WHERE cutoff<?", ((cutoff-timedelta(days=7)).isoformat(),))
+        rows = conn.execute("""SELECT r.* FROM reservations r JOIN daily_return_targets t
+            ON t.reservation_id=r.id AND t.booking_no=r.kiosk_booking_no
+            WHERE t.cutoff=? AND r.status IN ('active','ended')""", (cutoff.isoformat(),)).fetchall()
+        conn.execute("COMMIT")
+    return [_row(row) for row in rows]

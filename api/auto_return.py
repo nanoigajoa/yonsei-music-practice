@@ -94,13 +94,6 @@ def daily_window(current: datetime) -> tuple[datetime, datetime]:
             current.replace(hour=22, minute=0, second=0, microsecond=0))
 
 
-def daily_eligible(record, current: datetime) -> bool:
-    cutoff, stop = daily_window(current)
-    return (cutoff <= current < stop and record.status == "active"
-            and bool(record.kiosk_booking_no) and bool(record.student_id)
-            and record.start_at < cutoff < record.end_at and current < record.end_at)
-
-
 async def process_daily(action, now: datetime | None = None) -> int:
     import reservations
     current = kst_normalize(now) if now else kst_now()
@@ -115,7 +108,7 @@ async def process_daily(action, now: datetime | None = None) -> int:
             except Exception:
                 log.exception("21:50 자동 반납 연결 실패")
                 return False
-    targets = [r for r in reservations.open_reservations() if daily_eligible(r, current)]
+    targets = reservations.daily_return_snapshot(current)
     return sum(await asyncio.gather(*(run(r) for r in targets)))
 
 

@@ -674,7 +674,7 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
     try:
         intent = reservations.acquire(
             id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
-            student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no,
+            student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no, booking_source="kiosk",
         )
     except reservations.ReservationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -817,7 +817,8 @@ async def _daily_return(reservation_id: str) -> bool:
     async with _reservation_action_gate(reservation_id):
         record = reservations.get(reservation_id)
         current = kst_now()
-        if not record or not auto_return.daily_eligible(record, current):
+        cutoff, stop = auto_return.daily_window(current)
+        if not record or not cutoff <= current < stop or record.status not in {"active", "ended"}:
             return False
         if not reservations.claim_daily_return(record.id, record.kiosk_booking_no, current):
             return False
@@ -834,6 +835,6 @@ async def _daily_return(reservation_id: str) -> bool:
 @app.get("/announcements")
 async def announcements():
     return {"daily_return_enabled": DAILY_RETURN_ENABLED, "items": [{
-        "id": "daily-return-2150-v1", "title": "21:50 자동 반납 안내",
-        "body": "21:50 이전에 시작한 이용 예약은 남은 시간과 관계없이 21:50부터 자동 반납해요. 완료 여부를 꼭 확인해 주세요.",
+        "id": "daily-return-2150-v2", "title": "21:50 자동 반납 안내",
+        "body": "매일 21:50에 이 앱으로 빌려 사용 중인 방을 자동 반납해요. 남은 시간과 관계없이 적용되니 완료 여부를 확인해 주세요.",
     }] if DAILY_RETURN_ENABLED else []}
