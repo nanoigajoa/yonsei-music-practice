@@ -67,6 +67,7 @@ class CommunityTest(unittest.TestCase):
         result=self.client.get('/community/lounge')
         self.assertEqual(result.status_code,200)
         self.assertEqual(result.json()['messages'],[])
+        self.assertEqual(result.json()['nickname'],'익명')
         self.assertNotIn('user-a',result.text)
 
     def test_text_only_and_idempotent_chat(self):
@@ -80,6 +81,21 @@ class CommunityTest(unittest.TestCase):
         self.assertFalse(c.history('user-b')[0]['mine'])
         self.assertTrue(c.history('user-a')[0]['mine'])
         self.assertNotIn('uid',c.history('user-a')[0])
+
+    def test_different_authors_are_indistinguishable_in_history_and_live_payloads(self):
+        first,_=c.save_message('user-a',c.ChatMessage(client_id='anonymous-first-1',text='first'))
+        second,_=c.save_message('user-b',c.ChatMessage(client_id='anonymous-second',text='second'))
+        for uid in ('user-a','user-b','other-viewer'):
+            rows=c.history(uid)
+            self.assertEqual([row['author'] for row in rows],['익명','익명'])
+            self.assertEqual([row['mine'] for row in rows],[uid=='user-a',uid=='user-b'])
+            for row in (first,second):
+                payload=c.message_payload(row,uid)
+                self.assertEqual(set(payload),{'id','author','text','created_at','mine'})
+                self.assertEqual(payload['author'],'익명')
+        result=self.client.get('/community/lounge').json()
+        self.assertEqual(result['nickname'],'익명')
+        self.assertEqual([m['author'] for m in result['messages']],['익명','익명'])
 
     def test_empty_control_and_oversized_chat_rejected(self):
         for text in ('   ','hello\x00'):
@@ -197,6 +213,7 @@ class CommunityTest(unittest.TestCase):
                 message=ws.receive_json()
                 self.assertEqual(message['type'],'message')
                 self.assertTrue(message['message']['mine'])
+                self.assertEqual(message['message']['author'],'익명')
                 self.assertEqual(ws.receive_json()['type'],'ack')
         self.assertEqual(c.clients,{})
 

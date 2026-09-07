@@ -18,7 +18,7 @@ from firebase_admin import messaging
 
 import collector
 import reservations
-from auth_security import current_user, _firebase_app, student_key
+from auth_security import current_user, _firebase_app
 from clock import now as kst_now, parse as parse_kst
 
 log = logging.getLogger(__name__)
@@ -63,13 +63,8 @@ def member(user: dict = Depends(current_user)) -> dict:
     return user
 
 
-def alias(uid: str) -> str:
-    # Stable application alias; never expose a Google name, email, student ID or UID.
-    return "음대생 " + student_key("lounge:" + uid)[:6]
-
-
 def message_payload(row, uid: str | None = None):
-    return {"id": row["id"], "author": alias(row["uid"]), "text": row["text"],
+    return {"id": row["id"], "author": "익명", "text": row["text"],
             "created_at": row["created"], "mine": row["uid"] == uid}
 
 
@@ -107,7 +102,7 @@ def save_message(uid: str, data: ChatMessage):
 
 @router.get("/lounge")
 def lounge(user: dict = Depends(member)):
-    return {"messages": history(user["uid"]), "nickname": alias(user["uid"])}
+    return {"messages": history(user["uid"]), "nickname": "익명"}
 
 
 @router.websocket("/lounge/ws")
@@ -135,7 +130,7 @@ async def lounge_socket(ws: WebSocket):
         async def sender():
             while True:
                 await asyncio.wait_for(ws.send_json(await queue.get()), timeout=10)
-        queue.put_nowait({"type": "history", "messages": await asyncio.to_thread(history, uid), "nickname": alias(uid)})
+        queue.put_nowait({"type": "history", "messages": await asyncio.to_thread(history, uid), "nickname": "익명"})
         send_task = asyncio.create_task(sender())
         expires = time.monotonic() + 50*60
         while time.monotonic() < expires:
