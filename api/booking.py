@@ -183,10 +183,12 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 그대로 보존해, 화면에서 직접 누른 예약과 같은 요청을 만든다.
         b_hour, b_min = _next_ten_minute(now_cell, cell_min)
         start_total = int(b_hour) * 60 + int(b_min)
-        # 화면과 실제 점유 종료는 요청 시간 그대로 계산한다. 10:10부터
-        # 120분이면 반드시 12:10에 끝나야 하므로 마지막 10분 칸으로 줄이지
-        # 않는다.
-        finish_total = start_total + limit_time
+        # 학교 기록은 시작을 :01, 종료를 :59로 저장하고 분 단위 이용시간을
+        # 올림해 표시한다. 따라서 최대 120분은 종료 '분'을 시작+119분으로
+        # 보내야 10:10:01~12:09:59가 되어 학교 기준 정확히 120분이다.
+        # 시작+120분(12:10)을 보내면 121분으로 판정되어 최대시간 오류가 난다.
+        # 30/60/90분은 최대 경계가 아니므로 기존 키오스크 동작을 유지한다.
+        finish_total = start_total + limit_time - (1 if limit_time == 120 else 0)
         now = kst_now()
         start_at = now.replace(hour=int(b_hour), minute=int(b_min), second=0, microsecond=0)
         if start_at < now - timedelta(minutes=10):
@@ -201,10 +203,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             # 이 세 값은 동일한 첫 10분 칸을 가리켜야 한다. 목록의 실제 분
             # (예: 10:04)을 그대로 쓰면 학교가 126분으로 계산할 수 있다.
             "limit_time": str(limit_time), "now_cell_time": b_hour, "cell_min": b_min,
-            # 학교 서버의 최대시간 검사는 끝 경계를 포함하는 방식이다. 실제
-            # 예약칸은 12:10까지 유지하되, 검사용 숨은 종료값은 바로 전 초인
-            # 12:09:59로 보내면 120분 미만으로 비교된다. 키오스크 화면에서
-            # 2시간을 직접 고를 때와 같은 반열림 구간 [start, end) 표현이다.
+            # 숨은 종료값도 finish_hour/min과 동일한 초 경계를 가리키게 한다.
             "stime": start_at.strftime("%Y-%m-%d %H:%M:%S"),
             "etime": (end_at - timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S"),
             "begin_hour": b_hour, "begin_min": b_min,
