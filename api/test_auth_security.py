@@ -56,9 +56,9 @@ class BookingSecurityTest(unittest.TestCase):
             })
         self.assertEqual(response.status_code, 200)
 
-    def test_reserve_rejects_non_music_college_student_id(self):
+    def test_reserve_rejects_non_ten_digit_student_id(self):
         response = self.client.post("/booking/reserve", json={
-            "student_id": "2022123456", "corner_no": 1, "room_no": "119", "limit_time": 60,
+            "student_id": "202212345", "corner_no": 1, "room_no": "119", "limit_time": 60,
         })
         self.assertEqual(response.status_code, 422)
 
@@ -93,15 +93,15 @@ class BookingSecurityTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIsNone(reservations.binding_for_uid("new-user"))
 
-    def test_new_binding_accepts_student_verified_by_kiosk(self):
+    def test_new_binding_accepts_non_172_ten_digit_student_verified_by_kiosk(self):
         main.app.dependency_overrides[main.current_user] = lambda: {
             "uid": "new-user", "firebase": {"sign_in_provider": "google.com"},
         }
         with patch.object(main.booking, "validate_student", AsyncMock(return_value=True)):
-            response = self.client.post("/identity/bind", json={"student_id": "2023172528", "privacy_notice_version": main.PRIVACY_NOTICE_VERSION})
+            response = self.client.post("/identity/bind", json={"student_id": "2023123456", "privacy_notice_version": main.PRIVACY_NOTICE_VERSION})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(reservations.binding_for_uid("new-user"), student_key("2023172528"))
+        self.assertEqual(reservations.binding_for_uid("new-user"), student_key("2023123456"))
 
     def test_return_accepts_matching_user_and_capability(self):
         reservations.acquire(id="reservation-a", uid="user-a", student_id="2022172528", student_key="student-a", corner_no=1,

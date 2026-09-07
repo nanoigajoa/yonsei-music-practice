@@ -5,7 +5,9 @@ const ACTIVE_BOOKING_KEY = 'practice-room-active-booking'
 const PENDING_REQUEST_KEY = 'practice-room-pending-request'
 const MAX_AGE_MS = 4 * 60 * 60 * 1000
 const PENDING_TAG_GRACE_MS = 20 * 1000
-export const MUSIC_STUDENT_ID_PATTERN = /^20\d{2}172\d{3}$/
+// 학번 형식만 확인한다. 음악대학/대학원생 등 실제 이용 가능 여부는
+// 학번 등록 시 학교 키오스크 로그인으로 최종 검증한다.
+export const YONSEI_STUDENT_ID_PATTERN = /^20\d{8}$/
 
 export type ActiveBookingStep = 'tag' | 'active'
 
@@ -29,11 +31,11 @@ export interface PendingBookingRequest {
 export function getStudentId() {
   if (typeof window === 'undefined') return ''
   const value = localStorage.getItem(STUDENT_ID_KEY) ?? ''
-  return MUSIC_STUDENT_ID_PATTERN.test(value) ? value : ''
+  return YONSEI_STUDENT_ID_PATTERN.test(value) ? value : ''
 }
 
 export function saveStudentId(value: string) {
-  if (!MUSIC_STUDENT_ID_PATTERN.test(value)) throw new Error('invalid student id')
+  if (!YONSEI_STUDENT_ID_PATTERN.test(value)) throw new Error('invalid student id')
   localStorage.setItem(STUDENT_ID_KEY, value)
 }
 

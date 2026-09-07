@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
-import { getStudentId, MUSIC_STUDENT_ID_PATTERN, saveStudentId } from '@/lib/localBooking'
+import { getStudentId, YONSEI_STUDENT_ID_PATTERN, saveStudentId } from '@/lib/localBooking'
 
 const API_URL = process.env.NEXT_PUBLIC_BOOKING_API_URL
   ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
@@ -79,7 +79,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [authenticated, savedStudentId, user?.uid])
 
   async function saveAndBindStudent() {
-    if (!MUSIC_STUDENT_ID_PATTERN.test(studentId) || !noticeAcknowledged) return
+    if (!YONSEI_STUDENT_ID_PATTERN.test(studentId) || !noticeAcknowledged) return
     setSigningIn(true)
     setError('')
     try {
@@ -116,12 +116,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <div className="min-h-dvh flex items-center justify-center bg-rb-600 text-white text-sm">등록된 학번 확인 중...</div>
   }
   if (!savedStudentId) {
-    const valid = MUSIC_STUDENT_ID_PATTERN.test(studentId)
+    const valid = YONSEI_STUDENT_ID_PATTERN.test(studentId)
     return (
       <main className="min-h-dvh max-w-md mx-auto bg-rb-600 px-6 flex flex-col items-center justify-center text-center">
         <div className="w-20 h-20 rounded-3xl bg-white/15 flex items-center justify-center text-4xl">🪪</div>
         <h1 className="mt-6 text-2xl font-bold text-white">학번을 한 번만 입력하세요</h1>
-        <p className="mt-2 text-sm leading-6 text-white">음악대학 학번(20xx172xxx)을 입력하세요.<br />Google 계정에 한 번만 연결되며 이후 변경할 수 없습니다.</p>
+        <p className="mt-2 text-sm leading-6 text-white">연세대학교 학번 10자리를 입력하세요.<br />학교 키오스크에서 이용 가능한 학번만 등록됩니다.</p>
         <input value={studentId} onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
           inputMode="numeric" maxLength={10} placeholder="학번 10자리"
           className="mt-7 h-14 w-full rounded-2xl bg-white px-4 text-center text-lg font-bold text-gray-900 outline-none" />

@@ -169,7 +169,7 @@ app.add_middleware(
 
 
 class BookingRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    student_id: str = Field(pattern=r"^20\d{8}$")
     corner_no: int
     room_no: str = Field(pattern=r"^\d{3}$")
     limit_time: int = 120
@@ -178,24 +178,24 @@ class BookingRequest(BaseModel):
 
 
 class BookingActionRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    student_id: str = Field(pattern=r"^20\d{8}$")
     corner_no: int
     return_token: str = Field(min_length=20)
 
 
 class KioskImportRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    student_id: str = Field(pattern=r"^20\d{8}$")
     corner_no: int
     room_no: str = Field(pattern=r"^\d{3}$")
 
 
 class StudentBindingRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    student_id: str = Field(pattern=r"^20\d{8}$")
     privacy_notice_version: str | None = Field(default=None, max_length=32)
 
 
 class BookingResultRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{2}172\d{3}$")
+    student_id: str = Field(pattern=r"^20\d{8}$")
     request_id: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 

@@ -16,7 +16,7 @@ import reservations  # noqa: E402
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or not re.fullmatch(r"20\d{2}172\d{3}", sys.argv[1]):
+    if len(sys.argv) != 2 or not re.fullmatch(r"20\d{8}", sys.argv[1]):
         print("사용법: python reset_student_binding.py 학번")
         return 2
     with sqlite3.connect(reservations.DB_PATH) as conn:

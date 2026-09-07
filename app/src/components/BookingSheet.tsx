@@ -7,7 +7,7 @@ import { bookingApiErrorMessage } from '@/lib/bookingApiError'
 import { bookingFailureReason, trackBookingEvent } from '@/lib/bookingAnalytics'
 import {
   ActiveBooking, clearActiveBooking, getStudentId, saveActiveBooking,
-  clearPendingBookingRequest, getPendingBookingRequest, savePendingBookingRequest, MUSIC_STUDENT_ID_PATTERN,
+  clearPendingBookingRequest, getPendingBookingRequest, savePendingBookingRequest, YONSEI_STUDENT_ID_PATTERN,
 } from '@/lib/localBooking'
 
 const API_URL = process.env.NEXT_PUBLIC_BOOKING_API_URL
@@ -117,8 +117,8 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   }
 
   async function reserve() {
-    if (!MUSIC_STUDENT_ID_PATTERN.test(studentId)) {
-      setError(true); setMessage('음악대학 학번을 다시 등록해 주세요.'); return
+    if (!YONSEI_STUDENT_ID_PATTERN.test(studentId)) {
+      setError(true); setMessage('연세대학교 10자리 학번을 다시 등록해 주세요.'); return
     }
     const stableRequestId = requestId ?? newRequestId()
     setRequestId(stableRequestId)
