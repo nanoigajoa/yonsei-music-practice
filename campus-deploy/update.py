@@ -19,12 +19,12 @@ configured = subprocess.check_output(["systemctl", "show", service, "-p", "Worki
 if Path(configured).resolve() != root:
     raise SystemExit("Gateway installation path mismatch")
 python = root / ".venv/bin/python"
-files = ["auth_security.py", "auto_return.py", "booking.py", "clock.py", "collector.py", "main.py", "models.py", "reservations.py", "rooms.json"]
+files = ["auth_security.py", "auto_return.py", "booking.py", "clock.py", "collector.py", "community.py", "main.py", "models.py", "reservations.py", "rooms.json"]
 base = f"https://raw.githubusercontent.com/nanoigajoa/yonsei-music-practice/{revision}"
 with tempfile.TemporaryDirectory(prefix="gateway-code-") as work:
     stage = Path(work)
     for name in files:
-        if not (root / "api" / name).is_file():
+        if name != "community.py" and not (root / "api" / name).is_file():
             raise SystemExit(f"Existing source missing: {name}")
         with urlopen(f"{base}/api/{name}", timeout=30) as response:
             (stage / name).write_bytes(response.read())
@@ -39,14 +39,18 @@ with tempfile.TemporaryDirectory(prefix="gateway-code-") as work:
     try:
         for name in files:
             destination = root / "api" / name
-            shutil.copy2(destination, previous / name)
+            if destination.exists():
+                shutil.copy2(destination, previous / name)
             temporary = destination.with_suffix(destination.suffix + ".new")
             shutil.copy2(stage / name, temporary)
             temporary.replace(destination)
             changed.append(name)
     except BaseException:
         for name in changed:
-            shutil.copy2(previous / name, root / "api" / name)
+            if (previous / name).exists():
+                shutil.copy2(previous / name, root / "api" / name)
+            else:
+                (root / "api" / name).unlink(missing_ok=True)
         raise
     finally:
         subprocess.run(["systemctl", "start", service], check=True)

@@ -27,6 +27,7 @@ from fastapi.responses import StreamingResponse
 import collector
 import booking
 import auto_return
+import community
 import reservations
 from auth_security import current_user, issue_return_token, student_key, verify_return_token
 from models import StatusResponse
@@ -257,6 +258,7 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(collector.polling_loop(interval))
     tag_task = asyncio.create_task(pending_tag_sync_loop())
     recovery_task = asyncio.create_task(reservation_recovery_loop())
+    notifications_task = asyncio.create_task(community.notification_loop())
     # 미확정 요청은 학교 POST를 재실행하지 않고 durable 계획으로 조회 복구한다.
     for record in reservations.open_reservations():
         if record.status == "submitting" or (record.status == "creating" and record.dispatch_started is None):
@@ -267,7 +269,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        tasks = [task, tag_task, recovery_task] + ([return_task] if return_task else [])
+        tasks = [task, tag_task, recovery_task, notifications_task] + ([return_task] if return_task else [])
         for running in tasks:
             running.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -280,13 +282,14 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.include_router(community.router)
 app.state.poll_interval = max(10, int(os.getenv("POLL_INTERVAL_SECONDS", "20")))
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -410,6 +413,7 @@ async def health():
         "updated_at": state.updated_at if state else None,
         "booking_enabled": BOOKING_ENABLED,
         "school_access_allowed": True,
+        "community_enabled": True,
         "auto_return_enabled": AUTO_RETURN_ENABLED,
     }
 
