@@ -17,9 +17,10 @@ from clock import now as kst_now, normalize as kst_normalize, parse as parse_kst
 # 컨테이너 파일시스템 기본 영역은 재시작/배포 때 초기화되므로 배포 환경에서는
 # 반드시 RESERVATIONS_DB_PATH=/data/reservations.sqlite3으로 설정한다.
 DB_PATH = Path(os.getenv("RESERVATIONS_DB_PATH", str(Path(__file__).parent / ".data" / "reservations.sqlite3")))
-OPEN_STATUSES = ("creating", "pending_tag", "active")
-# `creating`은 외부 키오스크 요청을 보내는 아주 짧은 구간이다. 프로세스가
-# 요청 도중 죽었을 때 이 행이 영구적으로 학생/방을 잠그지 않도록 한다.
+OPEN_STATUSES = ("creating", "submitting", "uncertain", "pending_tag", "active")
+UNCONFIRMED_STATUSES = ("creating", "submitting", "uncertain")
+# 전송 전 creating만 준비 만료로 해제한다. 전송 후 submitting은 오래되어도
+# uncertain으로 전환해 선점을 유지한다.
 # 키오스크 한 번의 요청은 HTTP timeout(10초) 여러 번을 포함할 수 있어, 일반적인
 # 네트워크 지연보다 충분히 긴 2분을 기본값으로 잡는다.
 CREATING_TTL = timedelta(seconds=max(30, int(os.getenv("RESERVATION_CREATING_TTL_SECONDS", "120"))))
@@ -51,6 +52,8 @@ class Reservation:
     status: str
     kiosk_booking_no: str | None = None
     request_id: str | None = None
+    duration_min: int | None = None
+    dispatch_started: bool | None = None
 
 
 @contextmanager
@@ -69,6 +72,14 @@ def _connection():
         conn.execute("ALTER TABLE reservations ADD COLUMN student_key TEXT NOT NULL DEFAULT ''")
     if "request_id" not in columns:
         conn.execute("ALTER TABLE reservations ADD COLUMN request_id TEXT")
+    if "duration_min" not in columns:
+        conn.execute("ALTER TABLE reservations ADD COLUMN duration_min INTEGER")
+    if "dispatch_started" not in columns:
+        # NULL은 배포 전 코드가 남긴 전송 여부 불명 기록이다.
+        conn.execute("ALTER TABLE reservations ADD COLUMN dispatch_started INTEGER")
+    open_filter = "status IN ('creating','submitting','uncertain','pending_tag','active')"
+    for name, fields in (("uid", "uid"), ("student", "student_key"), ("room", "corner_no, room_no")):
+        conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS reservations_open_{name} ON reservations({fields}) WHERE {open_filter}")
     conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS reservations_uid_request_id_unique
                     ON reservations(uid, request_id) WHERE request_id IS NOT NULL""")
     # 학번 원문은 저장하지 않는다. BOOKING_TOKEN_SECRET로 만든 HMAC만 보관해
@@ -100,13 +111,15 @@ def _row(row: sqlite3.Row | None) -> Reservation | None:
         start_at=parse_kst(row["start_at"]), end_at=parse_kst(row["end_at"]),
         tag_deadline=parse_kst(row["tag_deadline"]), status=row["status"],
         kiosk_booking_no=row["kiosk_booking_no"], request_id=row["request_id"],
+        duration_min=row["duration_min"], dispatch_started=row["dispatch_started"],
     )
 
 
 def expire_pending(now: datetime | None = None) -> list[Reservation]:
     """이름은 호환성을 위해 유지한다. 모든 열린 고아 상태를 정리한다.
 
-    - creating: 프로세스 종료/네트워크 중단 후 남은 예약 의도
+    - creating: 전송하지 않은 준비만 만료. 전송 여부 불명은 uncertain으로 보존
+    - submitting/uncertain: 학교 반영 가능성이 있어 시간만으로 선점을 풀지 않음
     - pending_tag: 예약 시작 + 10분까지 태그하지 않은 예약
     - active: 이용 종료 시각이 지나 키오스크가 강제 반납했을 수 있는 기록
 
@@ -119,13 +132,17 @@ def expire_pending(now: datetime | None = None) -> list[Reservation]:
         conn.execute("BEGIN IMMEDIATE")
         rows = conn.execute(
             """SELECT * FROM reservations
-               WHERE (status='creating' AND created_at < ?)
+               WHERE (status='creating' AND dispatch_started=0 AND created_at < ?)
                   OR (status='pending_tag' AND tag_deadline < ?)
                   OR (status='active' AND end_at <= ?)""",
             ((now - CREATING_TTL).isoformat(), (now - PENDING_TAG_GRACE).isoformat(), now.isoformat()),
         ).fetchall()
         conn.execute(
-            "UPDATE reservations SET status='failed' WHERE status='creating' AND created_at < ?",
+            "UPDATE reservations SET status='failed' WHERE status='creating' AND dispatch_started=0 AND created_at < ?",
+            ((now - CREATING_TTL).isoformat(),),
+        )
+        conn.execute(
+            "UPDATE reservations SET status='uncertain' WHERE (status='submitting' OR (status='creating' AND dispatch_started IS NULL)) AND created_at < ?",
             ((now - CREATING_TTL).isoformat(),),
         )
         conn.execute("UPDATE reservations SET status='expired' WHERE status='pending_tag' AND tag_deadline < ?", ((now - PENDING_TAG_GRACE).isoformat(),))
@@ -143,6 +160,7 @@ def get(id: str) -> Reservation | None:
 
 def find_by_request(uid: str, request_id: str) -> Reservation | None:
     """같은 브라우저 요청의 재전송은 이전 처리 결과를 돌려준다."""
+    expire_pending()
     with _connection() as conn:
         row = conn.execute(
             "SELECT * FROM reservations WHERE uid=? AND request_id=? ORDER BY created_at DESC LIMIT 1",
@@ -225,7 +243,7 @@ def open_reservations() -> list[Reservation]:
 
 
 def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: int, room_no: str,
-            request_id: str | None = None) -> Reservation:
+            request_id: str | None = None, duration_min: int = 120) -> Reservation:
     """키오스크 호출 전에 학번과 방을 함께 선점한다.
 
     BEGIN IMMEDIATE가 단일 게이트웨이의 동시 요청을 직렬화한다. UID가 아니라
@@ -236,14 +254,18 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "UPDATE reservations SET status='failed' WHERE status='creating' AND created_at < ?",
+            "UPDATE reservations SET status='failed' WHERE status='creating' AND dispatch_started=0 AND created_at < ?",
+            ((now - CREATING_TTL).isoformat(),),
+        )
+        conn.execute(
+            "UPDATE reservations SET status='uncertain' WHERE (status='submitting' OR (status='creating' AND dispatch_started IS NULL)) AND created_at < ?",
             ((now - CREATING_TTL).isoformat(),),
         )
         conn.execute("UPDATE reservations SET status='expired' WHERE status='pending_tag' AND tag_deadline < ?", ((now - PENDING_TAG_GRACE).isoformat(),))
         conn.execute("UPDATE reservations SET status='ended' WHERE status='active' AND end_at <= ?", (now.isoformat(),))
         student_open = conn.execute(
-            f"SELECT * FROM reservations WHERE student_key=? AND status IN ({placeholders}) LIMIT 1",
-            (student_key, *OPEN_STATUSES),
+            f"SELECT * FROM reservations WHERE (student_key=? OR uid=?) AND status IN ({placeholders}) LIMIT 1",
+            (student_key, uid, *OPEN_STATUSES),
         ).fetchone()
         if student_open:
             conn.execute("ROLLBACK")
@@ -255,36 +277,46 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
         if room_open:
             conn.execute("ROLLBACK")
             raise ReservationConflict("방금 다른 사용자가 이 방을 예약했습니다. 다른 방을 선택해 주세요.")
-        conn.execute("""INSERT INTO reservations
-            (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?)""", (
-                id, uid, student_id, student_key, corner_no, room_no,
-                now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(),
-            ))
+        try:
+            conn.execute("""INSERT INTO reservations
+                (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at, duration_min, dispatch_started)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?, ?, 0)""", (
+                    id, uid, student_id, student_key, corner_no, room_no,
+                    now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(), duration_min,
+                ))
+        except sqlite3.IntegrityError as exc:
+            raise ReservationConflict("이미 처리된 예약 요청입니다. 기존 요청의 결과를 확인해 주세요.") from exc
         conn.execute("COMMIT")
-    return Reservation(id, uid, student_id, student_key, corner_no, room_no, now, now, now, "creating", request_id=request_id)
+    return Reservation(id, uid, student_id, student_key, corner_no, room_no, now, now, now, "creating", request_id=request_id, duration_min=duration_min, dispatch_started=False)
 
 
-def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no: str | None) -> Reservation:
+def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no: str | None,
+             status: str = "pending_tag") -> Reservation:
+    if status not in {"pending_tag", "active"}:
+        raise ValueError("invalid confirmed status")
     start_at = kst_normalize(start_at)
     end_at = start_at + timedelta(minutes=duration_min)
     deadline = start_at + timedelta(minutes=10)
     with _connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute("""UPDATE reservations SET start_at=?, end_at=?, tag_deadline=?, status='pending_tag', kiosk_booking_no=?
-                      WHERE id=? AND status='creating'""",
-                     (start_at.isoformat(), end_at.isoformat(), deadline.isoformat(), kiosk_booking_no, id))
+        updated = conn.execute("""UPDATE reservations SET start_at=?, end_at=?, tag_deadline=?, status=?, kiosk_booking_no=?
+                      WHERE id=? AND status IN ('creating','submitting','uncertain')
+                      AND (dispatch_started IS NULL OR dispatch_started=0 OR (start_at=? AND duration_min=?))""",
+                     (start_at.isoformat(), end_at.isoformat(), deadline.isoformat(), status, kiosk_booking_no, id,
+                      start_at.isoformat(), duration_min)).rowcount
+        if updated != 1:
+            raise ValueError("저장된 예약 계획과 일치하지 않아 확정하지 않았습니다.")
         row = conn.execute("SELECT * FROM reservations WHERE id=?", (id,)).fetchone()
         conn.execute("COMMIT")
     result = _row(row)
-    if not result or result.status != "pending_tag":
+    if not result or result.status != status:
         raise ValueError("예약 선점 상태를 확정하지 못했습니다.")
     return result
 
 
 def fail(id: str) -> None:
     with _connection() as conn:
-        conn.execute("UPDATE reservations SET status='failed' WHERE id=? AND status='creating'", (id,))
+        conn.execute("UPDATE reservations SET status='failed' WHERE id=? AND status='creating' AND dispatch_started=0", (id,))
 
 
 def set_status(id: str, status: str) -> Reservation | None:
@@ -304,3 +336,33 @@ def transition(id: str, *, expected_status: str, status: str) -> Reservation | N
             return None
         row = conn.execute("SELECT * FROM reservations WHERE id=?", (id,)).fetchone()
     return _row(row)
+
+
+def begin_submission(id: str, *, start_at: datetime) -> None:
+    """학교 전송보다 먼저 예약 계획을 영속화한다. 만료된 준비에서는 전송하지 않는다."""
+    start = kst_normalize(start_at)
+    with _connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM reservations WHERE id=?", (id,)).fetchone()
+        if not row or row["status"] != "creating" or row["dispatch_started"] != 0 or parse_kst(row["created_at"]) < kst_now() - CREATING_TTL:
+            raise ReservationConflict("예약 준비 시간이 지나 전송하지 않았습니다. 다시 시도해 주세요.")
+        duration = row["duration_min"]
+        if duration not in (30, 60, 90, 120):
+            raise ReservationConflict("예약 시간을 확인하지 못해 전송하지 않았습니다.")
+        conn.execute("""UPDATE reservations SET status='submitting', dispatch_started=1,
+                        start_at=?, end_at=?, tag_deadline=? WHERE id=?""",
+                     (start.isoformat(), (start + timedelta(minutes=duration)).isoformat(),
+                      (start + timedelta(minutes=10)).isoformat(), id))
+        conn.execute("COMMIT")
+
+
+def mark_uncertain(id: str) -> Reservation | None:
+    with _connection() as conn:
+        conn.execute("UPDATE reservations SET status='uncertain' WHERE id=? AND status IN ('creating','submitting')", (id,))
+    return get(id)
+
+
+def reject_submission(id: str) -> None:
+    """학교가 명시적으로 거절한 요청만 종료한다. 복원 완료 상태는 덮지 않는다."""
+    with _connection() as conn:
+        conn.execute("UPDATE reservations SET status='failed' WHERE id=? AND status IN ('creating','submitting')", (id,))

@@ -1,4 +1,7 @@
 import unittest
+from datetime import datetime
+import httpx
+from clock import KST
 from unittest.mock import AsyncMock, patch
 
 import booking
@@ -41,12 +44,30 @@ OFF_GRID_ROOM_HTML = """
 """
 
 
+LOGIN_HTML = "<script>window.opener.location = '/booking/index.php';</script>"
+
+
+def receipt(start="20:10", end="22:09", room="318", number="777", date="2026-09-07"):
+    return f"<table><tr><td>{date} {room}호 {start}~{end}</td><td><a onclick=\"booking_del('{number}')\">취소</a></td></tr></table>"
+
+
 class Response:
-    def __init__(self, text):
+    def __init__(self, text, status_code=200):
         self.text = text
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            request = httpx.Request("GET", "https://test.invalid")
+            raise httpx.HTTPStatusError("HTTP error", request=request, response=httpx.Response(self.status_code, request=request))
 
 
 class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        fixed = patch.object(booking, "kst_now", return_value=datetime(2026, 9, 7, 19, 0, tzinfo=KST))
+        fixed.start()
+        self.addCleanup(fixed.stop)
+
     def test_next_ten_minute_always_uses_a_future_slot(self):
         self.assertEqual(booking._next_ten_minute("18", "50"), ("19", "00"))
         self.assertEqual(booking._next_ten_minute("18", "51"), ("19", "00"))
@@ -84,9 +105,9 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             Response("<html></html>"),  # main_list page 1
             Response(ROOM_HTML),  # main_list page 2
             Response(FORM_HTML),  # reserve form
-            Response("<html></html>"),  # booking_info: booking number may not be reflected yet
+            Response(receipt("22:00", "22:30")),  # exact confirmed receipt
         ]
-        client.post.side_effect = [Response(""), Response("예약 완료")]
+        client.post.side_effect = [Response(LOGIN_HTML), Response("예약 완료")]
         context = AsyncMock()
         context.__aenter__.return_value = client
         context.__aexit__.return_value = False
@@ -107,9 +128,9 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             Response("<html></html>"),  # main_view login preparation
             Response(OFF_GRID_ROOM_HTML),  # main_list page 1
             Response("<html></html>"),  # reserve form: structure may be absent
-            Response("<html></html>"),  # booking_info
+            Response(receipt()),  # booking_info
         ]
-        client.post.side_effect = [Response(""), Response("예약 완료")]
+        client.post.side_effect = [Response(LOGIN_HTML), Response("예약 완료")]
         context = AsyncMock()
         context.__aenter__.return_value = client
         context.__aexit__.return_value = False
@@ -133,9 +154,9 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             Response("<html></html>"),  # main_view login preparation
             Response(OFF_GRID_ROOM_HTML),  # main_list page 1
             Response(NATIVE_FORM_HTML),  # reserve form
-            Response("<html></html>"),  # booking_info
+            Response(receipt()),  # booking_info
         ]
-        client.post.side_effect = [Response(""), Response("예약 완료")]
+        client.post.side_effect = [Response(LOGIN_HTML), Response("예약 완료")]
         context = AsyncMock()
         context.__aenter__.return_value = client
         context.__aexit__.return_value = False
@@ -161,12 +182,12 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             Response(FORM_HTML),  # first reserve form
             Response("<html></html>"),  # retry main_view
             Response(FORM_HTML),  # retry reserve form
-            Response("<html></html>"),  # booking_info
+            Response(receipt("22:00", "23:00")),  # booking_info
         ]
         client.post.side_effect = [
-            Response(""),  # first login
+            Response(LOGIN_HTML),  # first login
             Response('location.href="result.php?msg=로그인 후에 사용하세요"'),
-            Response(""),  # retry login
+            Response(LOGIN_HTML),  # retry login
             Response("예약 완료"),
         ]
         context = AsyncMock()
@@ -202,6 +223,17 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["active"])
         self.assertEqual(result["booking_no"], "777")
+
+    async def test_cancel_failure_text_is_not_success(self):
+        for text, success in (("예약 취소 실패", False), ("취소 버튼", False), ("예약 취소되었습니다.", True)):
+            client = AsyncMock()
+            client.get.side_effect = [Response(""), Response(""), Response(text)]
+            client.post.return_value = Response(LOGIN_HTML)
+            context = AsyncMock()
+            context.__aenter__.return_value = client
+            with patch.object(booking.httpx, "AsyncClient", return_value=context):
+                result = await booking.cancel("2022172528", 1, "119", "777")
+            self.assertEqual(result["success"], success)
 
 
 if __name__ == "__main__":

@@ -215,7 +215,7 @@ async def mark_reserved(corner_no: int, room_no: str, *, start_at: datetime,
         rooms = []
         changed = False
         for room in _state.rooms:
-            if room.corner_no == corner_no and room.name.endswith(suffix):
+            if room.corner_no == corner_no and re.search(r"(?<!\d)" + re.escape(suffix) + r"(?:\D|$)", room.name) is not None:
                 room = room.model_copy(update={
                     "occupied": True,
                     "handover": False,
@@ -315,13 +315,13 @@ def _apply_pending_overlays(rooms: List[Room]) -> List[Room]:
             overlay["tag_deadline"] + timedelta(seconds=PENDING_TAG_GRACE_SECONDS)
             if overlay["status"] == "pending_tag" else overlay["end_at"]
         )
-        if expires_at <= now_local:
+        if overlay["status"] != "uncertain" and expires_at <= now_local:
             _pending_reservations.pop(key, None)
             continue
         corner_no, room_no = key
         suffix = f"{room_no}호"
         for index, room in enumerate(result):
-            if room.corner_no == corner_no and room.name.endswith(suffix):
+            if room.corner_no == corner_no and re.search(r"(?<!\d)" + re.escape(suffix) + r"(?:\D|$)", room.name) is not None:
                 result[index] = room.model_copy(update={
                     "occupied": True,
                     "handover": False,

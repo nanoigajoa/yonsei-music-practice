@@ -1,0 +1,12 @@
+{
+  "api/auth_security.py": "156ceabc0b9dfc20121b68676a719145d026386c4280e74cd69274076b374ec9",
+  "api/auto_return.py": "a764e3b3da1c3b082895df7dd89b68fe649fbf7840ae567e5b92297160757e0a",
+  "api/booking.py": "ed4d3d56a36596e3c12757c9a8eded3cf4d2164ec4509c9b0eecb287e5d09d60",
+  "api/clock.py": "f93b8700618e8578735f475e7c1a28c94a9a5a8fd0976926ec1ea3753710f49f",
+  "api/collector.py": "3cd87dac3565789085d7fac2280825ba0c63ff337823ac9e767d502f833a0695",
+  "api/main.py": "617149f3df06405c44c5ba600a4a9875b93afb55cd8e06546d5f3506d9ce4982",
+  "api/models.py": "46f1a7e6165fabff95b468c1e845a0206a2544e941f388bebeebbfabc3e39fc5",
+  "api/requirements.txt": "9a91e8f130338868f41d577064174ef229c395cb7cebfab8f0ae8a153e746b08",
+  "api/reservations.py": "4c4035a47268ca20ef7185440dfa31dc1a8709179b384bfbc949f0706d56e40a",
+  "api/rooms.json": "9c2dfc9715cae0341afe9938b2f54dac9d4a9a4f1b238aa49a935aa9f7469261"
+}

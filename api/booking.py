@@ -5,6 +5,7 @@ import re
 import asyncio
 from datetime import datetime, timedelta
 from urllib.parse import unquote
+from collections.abc import Callable
 
 import httpx
 from bs4 import BeautifulSoup
@@ -21,6 +22,79 @@ CORNER_NAMES = {
     6: "음악관B 1층", 8: "음악관B 3층", 9: "음악관B 4층",
 }
 log = logging.getLogger(__name__)
+
+
+class ReservationOutcomeUnknown(RuntimeError):
+    """학교에 전송했을 수 있으나 일치하는 예약 내역을 아직 확인하지 못했다."""
+
+
+def _submission_evidence(html: str, room_no: str, start_at: datetime, duration_min: int,
+                         active_booking_no: str | None = None) -> dict | None:
+    """방·날짜·시작·종료·학교 식별자가 일치하는 단 하나의 예약만 복원한다."""
+    matches = []
+    end_at = start_at + timedelta(minutes=duration_min)
+    ends = {end_at.strftime("%H:%M")}
+    if duration_min == 120:
+        ends.add((end_at - timedelta(minutes=1)).strftime("%H:%M"))
+    for row in BeautifulSoup(html, "html.parser").select("tr"):
+        if row.find("tr") is not None:
+            continue
+        text = row.get_text(" ", strip=True)
+        rooms = re.findall(r"(?<!\d)(\d{3})호", text)
+        times = re.search(r"(\d{1,2}:\d{2})(?::\d{2})?\s*~\s*(\d{1,2}:\d{2})(?::\d{2})?", text)
+        if rooms != [room_no] or not times:
+            continue
+        start_label, end_label = (value.zfill(5) for value in times.groups())
+        if start_label != start_at.strftime("%H:%M") or end_label not in ends:
+            continue
+        dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
+        if dates:
+            if dates[0] != start_at.date().isoformat():
+                continue
+        elif start_at.date() != kst_now().date():
+            # 날짜 없는 내역으로 과거 요청을 오늘의 다른 예약에 연결하지 않는다.
+            continue
+        cancel_ids = re.findall(r"booking_del\(['\"](\d+)", str(row))
+        return_ids = re.findall(r"return\.php\?booking_no=(\d+)", str(row))
+        active = "이용중" in text or "사용중" in text
+        if active:
+            if not active_booking_no or return_ids != [active_booking_no]:
+                continue
+            number = active_booking_no
+        else:
+            if len(cancel_ids) != 1:
+                continue
+            number = cancel_ids[0]
+        matches.append({"success": True, "booking_no": number, "room_no": room_no,
+                        "start_at": start_at.isoformat(), "duration_min": duration_min,
+                        "status": "active" if active else "pending_tag"})
+    return matches[0] if len(matches) == 1 else None
+
+
+async def _read_submission(client: httpx.AsyncClient, corner_no: int, room_no: str,
+                           start_at: datetime, duration_min: int) -> dict | None:
+    page = await client.get(f"{BASE}/booking/booking_info.php", params={"corner_no": corner_no},
+                            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"})
+    page.raise_for_status()
+    evidence = _submission_evidence(page.text, room_no, start_at, duration_min)
+    if evidence:
+        return evidence
+    # 태그가 먼저 완료됐다면 index의 활성 식별자까지 일치해야 한다.
+    if "이용중" in page.text or "사용중" in page.text:
+        number = await _active_booking_no(client, corner_no)
+        return _submission_evidence(page.text, room_no, start_at, duration_min, number)
+    return None
+
+
+async def recover_submission(student_id: str, corner_no: int, room_no: str,
+                             start_at: datetime, duration_min: int) -> dict | None:
+    """예약 POST를 재전송하지 않고 본인의 학교 내역만 읽는다. 없음은 실패 증거가 아니다."""
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        response = await _login(client, student_id, corner_no)
+        response.raise_for_status()
+        if "window.opener.location" not in response.text or "/booking/index.php" not in response.text:
+            return None
+        return await _read_submission(client, corner_no, room_no, start_at, duration_min)
 
 
 def _current_room_status(seat) -> str:
@@ -88,10 +162,11 @@ def _native_form_values(html: str) -> dict[str, str]:
 
 
 async def _login(client: httpx.AsyncClient, student_id: str, corner_no: int) -> httpx.Response:
-    await client.get(
+    preparation = await client.get(
         f"{BASE}/booking/main_view.php",
         params={"corner_no": corner_no, "TimeCellSize": 0},
     )
+    preparation.raise_for_status()
     return await client.post(
         f"{BASE}/booking/login_proc.php",
         data={"rfid": student_id},
@@ -131,14 +206,18 @@ async def _pending_booking_no(client: httpx.AsyncClient, corner_no: int, room_no
     return None
 
 
-async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int) -> dict:
+async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int,
+                  *, before_submit: Callable[[datetime], None] | None = None) -> dict:
     if corner_no not in CORNER_NAMES:
         return {"success": False, "message": "지원하지 않는 건물/층입니다."}
     if limit_time not in (30, 60, 90, 120):
         return {"success": False, "message": "예약 시간은 30분 단위로 최대 2시간입니다."}
 
     async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
-        await _login(client, student_id, corner_no)
+        login = await _login(client, student_id, corner_no)
+        login.raise_for_status()
+        if "window.opener.location" not in login.text or "/booking/index.php" not in login.text:
+            return {"success": False, "message": "학교 로그인을 확인하지 못해 예약을 전송하지 않았습니다."}
         params = None
         blocked_message = None
         for page in ["", "2", "3", "4"]:
@@ -147,6 +226,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
                 params={"corner_no": corner_no, "TimeCellSize": 0, "page": page},
                 headers={**HEADERS, "Referer": f"{BASE}/booking/main_view.php"},
             )
+            listing.raise_for_status()
             soup = BeautifulSoup(listing.text, "html.parser")
             for seat in soup.select("div.Body-List"):
                 title = seat.select_one("div.title tr td:nth-child(2)")
@@ -161,7 +241,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
                 if len(values) >= 6:
                     params = values[:6]
                 break
-            if params:
+            if params or blocked_message:
                 break
 
         if not params:
@@ -178,6 +258,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             },
             headers={**HEADERS, "Referer": f"{BASE}/booking/main_list.php"},
         )
+        form.raise_for_status()
         # 시작은 서비스 규칙대로 항상 다음 10분 정각이다. 다만 종료·경계
         # 계산에 필요한 hidden/select 값은 키오스크가 만든 예약 폼의 값을
         # 그대로 보존해, 화면에서 직접 누른 예약과 같은 요청을 만든다.
@@ -209,11 +290,14 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             "begin_hour": b_hour, "begin_min": b_min,
             "finish_hour": str(finish_total // 60), "finish_min": f"{finish_total % 60:02d}",
         }
+        if before_submit is not None:
+            before_submit(start_at)
         result = await client.post(
             f"{BASE}/booking/reserve_proc.php",
             data=reserve_data,
             headers={**HEADERS, "Referer": f"{BASE}/booking/reserve.php"},
         )
+        result.raise_for_status()
         error = re.search(r"msg=([^\"&]+)", result.text)
         message = unquote(error.group(1)) if error else ""
         if "로그인 후" in message:
@@ -238,14 +322,16 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             )
         log.info("키오스크 예약 전송 | room=%s start=%s:%s last_slot=%s:%02d duration=%s",
                  room_no, b_hour, b_min, finish_total // 60, finish_total % 60, limit_time)
+        result.raise_for_status()
         error = re.search(r"msg=([^\"&]+)", result.text)
-        if error:
-            return {"success": False, "message": unquote(error.group(1))}
-        booking_no = await _pending_booking_no(client, corner_no, room_no)
-        return {
-            "success": True, "message": f"실시간 확인 및 {room_no}호 예약 완료",
-            "start_at": start_at.isoformat(), "duration_min": limit_time, "booking_no": booking_no,
-        }
+        message = unquote(error.group(1)) if error else ""
+        if re.search(r"로그인 후|이미.*(?:예약|사용)|다른 이용자.*예약|예약.*불가|예약할 수 없|최대.*(?:120|2시간)|시간선택|시간 선택", message):
+            return {"success": False, "message": message}
+        # 알 수 없는 msg도 거절로 추측하지 않고 일치하는 내역을 확인한다.
+        evidence = await _read_submission(client, corner_no, room_no, start_at, limit_time)
+        if not evidence:
+            raise ReservationOutcomeUnknown("학교 예약 내역을 확인 중입니다. 같은 예약을 다시 전송하지 않습니다.")
+        return {**evidence, "message": f"실시간 확인 및 {room_no}호 예약 완료"}
 
 
 async def _booking_no(client: httpx.AsyncClient, corner_no: int) -> str | None:
@@ -253,6 +339,7 @@ async def _booking_no(client: httpx.AsyncClient, corner_no: int) -> str | None:
         f"{BASE}/booking/index.php",
         params={"reload": 1, "corner_no": corner_no, "TimeCellSize": 0},
     )
+    index.raise_for_status()
     match = re.search(r'var booking_no\s*=\s*["\'](\d+)["\']', index.text)
     if match:
         return match.group(1)
@@ -280,6 +367,7 @@ async def _active_booking_no(client: httpx.AsyncClient, corner_no: int) -> str |
         f"{BASE}/booking/index.php",
         params={"reload": 1, "corner_no": corner_no, "TimeCellSize": 0},
     )
+    index.raise_for_status()
     match = re.search(r'var booking_no\s*=\s*["\'](\d+)["\']', index.text)
     return match.group(1) if match else None
 
@@ -390,6 +478,10 @@ async def cancel(student_id: str, corner_no: int, room_no: str, booking_no: str 
             params={"result_code": 7, "booking_no": number},
             headers={**HEADERS, "Referer": f"{BASE}/booking/booking_info.php"},
         )
-    if "취소" in result.text or "삭제" in result.text:
+    result.raise_for_status()
+    # '취소 실패', 취소 버튼, 오류 페이지를 성공으로 오인하지 않는다.
+    if not re.search(r"실패|오류|불가|할 수 없", result.text) and re.search(
+        r"(?:취소|삭제)(?:가)?\s*(?:되었습니다|되었|완료)", result.text
+    ):
         return {"success": True, "message": "예약 취소 완료"}
     return {"success": False, "message": "예약 취소 처리에 실패했습니다."}

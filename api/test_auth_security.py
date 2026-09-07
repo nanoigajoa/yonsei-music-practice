@@ -31,7 +31,7 @@ class BookingSecurityTest(unittest.TestCase):
 
     @staticmethod
     def reserve_result():
-        return {"success": True, "message": "ok", "start_at": "2026-09-02T13:10:00"}
+        return {"success": True, "message": "ok", "start_at": "2026-09-02T13:10:00", "booking_no": "123"}
 
     def test_reserve_issues_capability_for_authenticated_user(self):
         with patch.object(main.booking, "reserve", AsyncMock(return_value=self.reserve_result())):

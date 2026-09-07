@@ -41,8 +41,9 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         calls = 0
         start = (datetime.now() + timedelta(minutes=20)).replace(second=0, microsecond=0)
 
-        async def fake_kiosk(*_args):
+        async def fake_kiosk(*_args, **kwargs):
             nonlocal calls
+            kwargs["before_submit"](start)
             calls += 1
             await asyncio.sleep(0.02)
             return {"success": True, "message": "ok", "start_at": start.isoformat(), "booking_no": "mock-1"}
@@ -356,8 +357,9 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         peak = 0
         start = (datetime.now() + timedelta(minutes=20)).replace(second=0, microsecond=0)
 
-        async def fake_kiosk(*_args):
+        async def fake_kiosk(*_args, **kwargs):
             nonlocal active, peak
+            kwargs["before_submit"](start)
             active += 1
             peak = max(peak, active)
             await asyncio.sleep(0.01)
