@@ -22,6 +22,17 @@ FORM_HTML = """
 <select name="begin_hour"><option value="21">21</option></select>
 <select name="begin_min"><option value="50">50</option></select>
 """
+NATIVE_FORM_HTML = """
+<form>
+  <input type="hidden" name="native_token" value="kiosk-generated-token">
+  <input type="hidden" name="stime" value="2026-09-07 20:04:01">
+  <input type="hidden" name="etime" value="">
+  <input type="hidden" name="now_cell_time" value="20">
+  <input type="hidden" name="cell_min" value="04">
+  <input type="checkbox" name="unchecked" value="no">
+  <input type="checkbox" name="checked" value="yes" checked>
+</form>
+"""
 OFF_GRID_ROOM_HTML = """
 <div class="Body-List">
   <div class="title"><table><tr><td></td><td>연습실(318호)</td></tr></table></div>
@@ -39,6 +50,13 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
     def test_next_ten_minute_always_uses_a_future_slot(self):
         self.assertEqual(booking._next_ten_minute("18", "50"), ("19", "00"))
         self.assertEqual(booking._next_ten_minute("18", "51"), ("19", "00"))
+
+    def test_native_form_values_keeps_hidden_values_and_omits_unchecked_controls(self):
+        values = booking._native_form_values(NATIVE_FORM_HTML)
+        self.assertEqual(values["native_token"], "kiosk-generated-token")
+        self.assertEqual(values["stime"], "2026-09-07 20:04:01")
+        self.assertEqual(values["checked"], "yes")
+        self.assertNotIn("unchecked", values)
 
     def test_current_occupied_slot_is_detected(self):
         soup = BeautifulSoup(OCCUPIED_HTML, "html.parser")
@@ -106,8 +124,32 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reserve_payload["finish_hour"], "22")
         self.assertEqual(reserve_payload["finish_min"], "10")
         self.assertEqual(reserve_payload["now_cell_time"], "20")
-        self.assertEqual(reserve_payload["cell_min"], "10")
+        self.assertEqual(reserve_payload["cell_min"], "04")
         self.assertEqual(reserve_payload["limit_time"], "120")
+
+    async def test_reserve_preserves_kiosk_native_time_values(self):
+        client = AsyncMock()
+        client.get.side_effect = [
+            Response("<html></html>"),  # main_view login preparation
+            Response(OFF_GRID_ROOM_HTML),  # main_list page 1
+            Response(NATIVE_FORM_HTML),  # reserve form
+            Response("<html></html>"),  # booking_info
+        ]
+        client.post.side_effect = [Response(""), Response("예약 완료")]
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        context.__aexit__.return_value = False
+
+        with patch.object(booking.httpx, "AsyncClient", return_value=context):
+            result = await booking.reserve("2022172528", 3, "318", 120)
+
+        self.assertTrue(result["success"])
+        payload = client.post.await_args_list[1].kwargs["data"]
+        self.assertEqual(payload["native_token"], "kiosk-generated-token")
+        self.assertEqual(payload["stime"], "2026-09-07 20:04:01")
+        self.assertEqual((payload["now_cell_time"], payload["cell_min"]), ("20", "04"))
+        self.assertEqual((payload["begin_hour"], payload["begin_min"]), ("20", "10"))
+        self.assertEqual((payload["finish_hour"], payload["finish_min"]), ("22", "10"))
 
     async def test_reserve_retries_once_only_after_explicit_kiosk_login_failure(self):
         client = AsyncMock()

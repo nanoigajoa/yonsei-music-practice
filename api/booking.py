@@ -54,6 +54,38 @@ def _next_ten_minute(hour: str, minute: str) -> tuple[str, str]:
     return str(rounded // 60), f"{rounded % 60:02d}"
 
 
+def _native_form_values(html: str) -> dict[str, str]:
+    """키오스크 예약 폼이 기본으로 넣은 전송값을 보존한다.
+
+    예약 페이지에는 화면에 보이지 않는 시간·세션 보조 필드가 포함될 수 있다.
+    이를 빈 값으로 다시 만들면 키오스크 화면과 다른 경계 계산이 발생할 수
+    있으므로, 실제 브라우저 폼과 같은 기본값을 먼저 수집한다.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    values: dict[str, str] = {}
+    for field in soup.select("input[name], select[name], textarea[name]"):
+        if field.has_attr("disabled"):
+            continue
+        name = field.get("name")
+        if not name:
+            continue
+        if field.name == "select":
+            option = field.select_one("option[selected]") or field.select_one("option")
+            if option is not None:
+                values[name] = option.get("value", option.get_text(strip=True))
+            continue
+        if field.name == "textarea":
+            values[name] = field.get_text()
+            continue
+        field_type = field.get("type", "text").lower()
+        if field_type in {"submit", "button", "reset", "file", "image"}:
+            continue
+        if field_type in {"checkbox", "radio"} and not field.has_attr("checked"):
+            continue
+        values[name] = field.get("value", "")
+    return values
+
+
 async def _login(client: httpx.AsyncClient, student_id: str, corner_no: int) -> httpx.Response:
     await client.get(
         f"{BASE}/booking/main_view.php",
@@ -145,10 +177,9 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             },
             headers={**HEADERS, "Referer": f"{BASE}/booking/main_list.php"},
         )
-        # reserve.php 응답의 select 구조는 키오스크 개편에 따라 달라질 수 있다.
-        # 목록이 제공한 현재 시각을 기준으로 서버에서 다음 10분 정각을 강제해
-        # 20:04 같은 비정규 예약 시각이 외부 서버로 전송되지 않게 한다.
-        # 이 GET은 키오스크 세션/Referer 흐름을 유지하기 위해 계속 필요하다.
+        # 시작은 서비스 규칙대로 항상 다음 10분 정각이다. 다만 종료·경계
+        # 계산에 필요한 hidden/select 값은 키오스크가 만든 예약 폼의 값을
+        # 그대로 보존해, 화면에서 직접 누른 예약과 같은 요청을 만든다.
         b_hour, b_min = _next_ten_minute(now_cell, cell_min)
         start_total = int(b_hour) * 60 + int(b_min)
         # finish_*는 예약의 실제 종료 시각이다. 예를 들어 10:10부터 120분은
@@ -156,15 +187,17 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 키오스크가 110분 예약으로 확정한다.
         finish_total = start_total + limit_time
 
+        native_values = _native_form_values(form.text)
         reserve_data = {
+            **native_values,
             "admin_mode": "", "corner_no": corner, "pc_id": pc_id, "quick": "",
             "corner_name": CORNER_NAMES[corner_no], "pc_name_no": f"연습실({room_no})",
-            # 키오스크는 종료 시각뿐 아니라 now_cell_time/cell_min부터 종료까지의
-            # 차이도 최대 이용 시간으로 검사한다. 실제 분(예: 20:04)을 그대로
-            # 보내고 시작만 20:10으로 올리면 120분 예약이 126분으로 계산되어
-            # 거부된다. 세 값은 같은 10분 슬롯을 가리켜야 한다.
-            "limit_time": str(limit_time), "now_cell_time": b_hour, "cell_min": b_min,
-            "stime": "", "etime": "", "begin_hour": b_hour, "begin_min": b_min,
+            "limit_time": str(limit_time),
+            # 목록→예약폼이 만든 현재 시각 기준값을 유지한다. 임의로 시작 시각
+            # 으로 덮어쓰면 120분 경계에서 키오스크의 실제 계산과 달라진다.
+            "now_cell_time": native_values.get("now_cell_time", now_cell),
+            "cell_min": native_values.get("cell_min", cell_min),
+            "begin_hour": b_hour, "begin_min": b_min,
             "finish_hour": str(finish_total // 60), "finish_min": f"{finish_total % 60:02d}",
         }
         result = await client.post(
