@@ -88,6 +88,11 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     action: Exclude<BookingAction, null>,
     timeoutMs = REQUEST_TIMEOUT_MS,
   ) {
+    if (!canStartBooking()) {
+      setError(true)
+      setMessage('학교 연동은 오전 7시부터 가능합니다.')
+      return null
+    }
     setLoadingAction(action)
     setMessage('')
     const controller = new AbortController()
@@ -96,6 +101,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
       // 예약 직전에 토큰을 강제 갱신해 만료된 캐시 토큰을 보내지 않도록 한다.
       const idToken = await auth.currentUser?.getIdToken(true)
       if (!idToken) throw new Error('로그인이 필요합니다.')
+      if (!canStartBooking()) throw new Error('학교 연동은 오전 7시부터 가능합니다.')
       const res = await fetch(`${API_URL}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
