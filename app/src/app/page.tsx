@@ -18,10 +18,10 @@ const CONN_BADGE: Record<string, string> = {
   error:      '⚠ 오프라인',
 }
 const CONN_COLOR: Record<string, string> = {
-  live:       'text-emerald-300',
-  polling:    'text-yellow-300',
-  connecting: 'text-rb-200',
-  error:      'text-red-300',
+  live:       'text-white',
+  polling:    'text-white',
+  connecting: 'text-white',
+  error:      'text-white',
 }
 
 // ── 운영 시간 판별 (07:00–22:00) ──────────────────────────
@@ -61,24 +61,28 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
   // 운영외 시간이면 모두 회색
   if (!operating) {
     return (
-      <div className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-40">
+      <div className="rounded-xl bg-gray-100 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center">
         <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-        <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
-        {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-        <span className="text-[10px] text-gray-400 leading-none">운영외</span>
+        <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
+        {isOrgan && <span className="text-[9px] text-gray-700 leading-none">오르간</span>}
+        <span className="text-[10px] text-gray-700 leading-none">운영외</span>
       </div>
     )
   }
 
   if (room.occupied) {
+    const handover = room.handover === true
+    const pendingTag = room.reservation_state === 'pending_tag'
     return (
-      <button onClick={() => onReserve(room)} aria-label={`${num}호 실시간 확인 후 예약`}
-        className="rounded-xl bg-rb-50 border-2 border-rb-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
-        <div className="w-1.5 h-1.5 rounded-full bg-rb-400" />
-        <span className="text-xs font-bold text-rb-800 leading-none mt-0.5">{num}호</span>
-        {isOrgan && <span className="text-[9px] text-rb-400 leading-none">오르간</span>}
-        <span className="text-[10px] text-rb-500 leading-none">
-          {room.occupied_until ? `~${room.occupied_until}` : '사용중'}
+      <button onClick={() => onReserve(room)}
+        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${handover ? 'bg-gray-100 border-2 border-gray-300' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${handover ? 'bg-gray-400' : pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
+        <span className={`text-xs font-bold leading-none mt-0.5 ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
+        {isOrgan && <span className={`text-[9px] ${handover ? 'text-gray-500' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
+        <span className={`text-[10px] leading-none ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
+          {pendingTag ? '인증대기' : handover
+            ? `곧 가능${room.occupied_until ? ` ~${room.occupied_until}` : ''}`
+            : room.occupied_until ? `사용중 ~${room.occupied_until}` : '사용중'}
         </span>
       </button>
     )
@@ -86,11 +90,11 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
 
   if (period) {
     return (
-      <button onClick={() => onReserve(room)} aria-label={`${num}호 예약하기`}
+      <button onClick={() => onReserve(room)}
         className="rounded-xl bg-emerald-50 border-2 border-emerald-300 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span className="text-xs font-bold text-emerald-800 leading-none mt-0.5">{num}호</span>
-        {isOrgan && <span className="text-[9px] text-emerald-400 leading-none">오르간</span>}
+        {isOrgan && <span className="text-[9px] text-emerald-700 leading-none">오르간</span>}
         <span className="text-[10px] text-emerald-700 leading-none">{period.start}~</span>
       </button>
     )
@@ -98,12 +102,12 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
 
   // 운영 중이지만 가용 슬롯 없음 (예: 오늘 예약이 꽉 찼거나 반납 완료)
   return (
-    <button onClick={() => onReserve(room)} aria-label={`${num}호 실시간 확인 후 예약`}
-      className="rounded-xl bg-gray-50 border-2 border-gray-100 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center opacity-60 active:scale-95 transition-transform">
-      <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-      <span className="text-xs font-bold text-gray-500 leading-none mt-0.5">{num}호</span>
-      {isOrgan && <span className="text-[9px] text-gray-400 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-400 leading-none">인증대기</span>
+    <button onClick={() => onReserve(room)}
+      className="rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+      <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
+      {isOrgan && <span className="text-[9px] text-gray-700 leading-none">오르간</span>}
+      <span className="text-[10px] text-gray-700 leading-none">곧 가능</span>
     </button>
   )
 }
@@ -123,7 +127,7 @@ export default function HomePage() {
   // 운영 시간 표시 갱신
   useEffect(() => {
     const initial = setTimeout(() => setNow(Date.now()), 0)
-    const id = setInterval(() => setNow(Date.now()), 60000)
+    const id = setInterval(() => setNow(Date.now()), 1000)
     return () => { clearTimeout(initial); clearInterval(id) }
   }, [])
 
@@ -143,16 +147,24 @@ export default function HomePage() {
   const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
   const operating   = now !== null && isOperatingHours(new Date(now))
 
+  function openBooking(room: Room) {
+    if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
+      setBookingRoom(activeBooking.room)
+      return
+    }
+    setBookingRoom(room)
+  }
+
   // rooms 배열 기준 재계산 (인증대기 방이 집계에서 빠지는 문제 방지)
   const totalCount    = status?.rooms.length ?? 0
   const availableCount = status?.rooms.filter(r => !r.occupied && r.available_periods.length > 0).length ?? 0
-  const occupiedCount  = totalCount - availableCount
+  const occupiedCount  = status?.rooms.filter(r => r.occupied).length ?? 0
 
   function floorAvailable(floor: number) {
     if (!operating) return 0
     return Object.values(byFloor[floor] ?? {})
       .flat()
-      .filter((r) => r.available_periods.length > 0).length
+      .filter((r) => !r.occupied && r.available_periods.length > 0).length
   }
 
   return (
@@ -162,7 +174,7 @@ export default function HomePage() {
       <header className="bg-rb-600 px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 sticky top-0 z-20">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-rb-200 text-xs font-semibold tracking-widest uppercase">Yonsei Music</p>
+            <p className="text-white text-xs font-semibold tracking-widest uppercase">Yonsei Music</p>
             <h1 className="text-white text-2xl font-bold mt-0.5">연습실 공실 현황</h1>
           </div>
           {/* 새로고침 + 연결 배지 */}
@@ -184,12 +196,12 @@ export default function HomePage() {
           </div>
         </div>
         <div className="flex items-center justify-between mt-0.5">
-          <p className="text-rb-200 text-sm">
+          <p className="text-white text-sm">
             키오스크 실시간 연동{updatedAt && <span> · {updatedAt} 갱신</span>}
           </p>
           {/* 프로필 칩 → 마이페이지 */}
           {profile && (
-            <Link href="/mypage" className="text-[11px] text-rb-200 font-medium hover:text-white transition-colors active:opacity-70 flex items-center gap-1">
+            <Link href="/mypage" className="text-[11px] text-white font-medium transition-colors active:opacity-70 flex items-center gap-1">
               {profile.nickname} · {profile.department} ›
             </Link>
           )}
@@ -202,17 +214,17 @@ export default function HomePage() {
               {[
                 { label: '전체',   value: totalCount,     color: 'bg-rb-700 text-rb-100' },
                 { label: '사용중', value: occupiedCount,  color: 'bg-rb-800 text-rb-200' },
-                { label: '공실',   value: availableCount, color: 'bg-emerald-600 text-emerald-50' },
+                { label: '공실',   value: availableCount, color: 'bg-emerald-700 text-white' },
               ].map(({ label, value, color }) => (
                 <div key={label} className={`flex-1 rounded-xl ${color} py-1.5 text-center`}>
                   <p className="text-base font-bold leading-none">{value}</p>
-                  <p className="text-[10px] mt-0.5 opacity-80">{label}</p>
+                  <p className="text-[10px] mt-0.5">{label}</p>
                 </div>
               ))}
             </div>
           ) : (
             <div className="mt-3 rounded-xl bg-rb-700 px-4 py-2 text-center">
-              <p className="text-rb-200 text-xs font-medium">🌙 운영 시간 외 · 07:00 – 22:00 운영</p>
+              <p className="text-white text-xs font-medium">🌙 운영 시간 외 · 07:00 – 22:00 운영</p>
             </div>
           )
         )}
@@ -227,7 +239,7 @@ export default function HomePage() {
           <span>
             <span className="block text-sm font-bold text-emerald-800">진행 중 · {roomNum(activeBooking.room.name)}호</span>
             <span className="block text-xs text-emerald-600 mt-0.5">
-              {activeBooking.step === 'tag' ? '학생증 태그 후 인증을 확인하세요' : '사용 후 앱에서 반납하세요'}
+              {activeBooking.step === 'tag' ? '학생증 태그만 하면 자동으로 사용 상태가 갱신됩니다' : '사용 후 앱에서 반납하세요'}
             </span>
           </span>
           <span className="text-emerald-600 font-bold">열기 →</span>
@@ -269,10 +281,24 @@ export default function HomePage() {
       <main className="flex-1 px-4 pt-4 space-y-5">
 
         {/* 로딩 */}
-        {!status && (
+        {!status && connState !== 'error' && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-8 h-8 rounded-full border-2 border-rb-200 border-t-rb-600 animate-spin" />
-            <p className="text-gray-400 text-sm">키오스크 서버 연결 중...</p>
+            <p className="text-gray-600 text-sm">키오스크 서버 연결 중...</p>
+          </div>
+        )}
+
+        {!status && connState === 'error' && (
+          <div role="alert" className="flex flex-col items-center justify-center py-14 gap-3 text-center">
+            <p className="text-3xl">📡</p>
+            <div>
+              <p className="font-bold text-gray-800">현황 서버에 연결할 수 없어요</p>
+              <p className="mt-1 text-sm text-gray-600">인터넷 연결을 확인하고 다시 시도해 주세요.</p>
+            </div>
+            <button onClick={refresh} disabled={refreshing}
+              className="mt-1 h-11 rounded-xl bg-rb-600 px-5 text-sm font-bold text-white disabled:opacity-50">
+              {refreshing ? '다시 연결 중...' : '다시 시도'}
+            </button>
           </div>
         )}
 
@@ -281,28 +307,28 @@ export default function HomePage() {
           const rooms     = floorData[cornerNo]
           if (!rooms?.length) return null
           const availCount = operating
-            ? rooms.filter((r) => r.available_periods.length > 0).length
+            ? rooms.filter((r) => !r.occupied && r.available_periods.length > 0).length
             : 0
           const building  = buildingOf(cornerNo)
           return (
             <section key={cornerNo}>
               <div className="flex items-center justify-between mb-2.5">
                 <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {activeFloor}층 · <span className="text-rb-500">{building}</span> · {sectionLabel(rooms)}
+                  {activeFloor}층 · <span className="text-rb-700">{building}</span> · {sectionLabel(rooms)}
                 </h2>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   !operating
-                    ? 'bg-gray-100 text-gray-400'
+                    ? 'bg-gray-100 text-gray-700'
                     : availCount > 0
                     ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-gray-100 text-gray-500'
+                    : 'bg-gray-100 text-gray-700'
                 }`}>
-                  {!operating ? '운영외' : availCount > 0 ? `공실 ${availCount}개` : '모두 사용중'}
+                  {!operating ? '운영외' : availCount > 0 ? `공실 ${availCount}개` : '공실 없음'}
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} operating={operating} onReserve={setBookingRoom} />
+                  <RoomChip key={room.name} room={room} operating={operating} onReserve={openBooking} />
                 ))}
               </div>
             </section>
@@ -312,19 +338,21 @@ export default function HomePage() {
         {status && corners.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
             <p className="text-3xl">🎵</p>
-            <p className="text-gray-400 text-sm">{activeFloor}층 정보가 없어요</p>
+            <p className="text-gray-600 text-sm">{activeFloor}층 정보가 없어요</p>
           </div>
         )}
 
         {/* 범례 */}
         {status && (
-          <div className="flex items-center justify-center gap-4 pt-2">
-            {[
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2">
+            {(operating ? [
               { dot: 'bg-emerald-400', label: '공실' },
               { dot: 'bg-rb-400',      label: '사용중' },
-              { dot: 'bg-gray-300',    label: '운영외' },
-            ].map(({ dot, label }) => (
-              <span key={label} className="flex items-center gap-1.5 text-xs text-gray-400">
+              { dot: 'bg-gray-400',    label: '곧 가능' },
+            ] : [
+              { dot: 'bg-gray-300', label: '운영외' },
+            ]).map(({ dot, label }) => (
+              <span key={label} className="flex items-center gap-1.5 text-xs text-gray-700">
                 <span className={`w-2 h-2 rounded-full ${dot}`} />
                 {label}
               </span>
@@ -335,25 +363,20 @@ export default function HomePage() {
 
       {/* ── 하단 버튼 ── */}
       <div className="px-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+24px)] space-y-2.5">
-        {/* 대기 보고하기 — 풀너비 */}
-        <Link
-          href="/report"
-          className="flex items-center justify-center w-full h-14 rounded-2xl bg-rb-600 text-white text-base font-bold shadow-md active:scale-[0.98] transition-transform"
-        >
-          📣 대기 보고하기
-        </Link>
-        <div>
-          <Link href="/alarm"
-            className="flex items-center justify-center h-14 rounded-2xl bg-rb-50 border-2 border-rb-200 text-rb-700 text-sm font-bold active:scale-[0.98] transition-transform gap-2">
-            <span>⏰</span><span>태그·반납 알림</span>
-          </Link>
+        <div className="flex items-center justify-center w-full h-[88px] rounded-2xl bg-rb-600 text-white shadow-md">
+          <time dateTime={now ? new Date(now).toISOString() : undefined}
+            className="font-mono text-4xl font-bold tabular-nums tracking-wider" aria-label="현재 시각">
+            {now ? new Date(now).toLocaleTimeString('ko-KR', {
+              hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+            }) : '--:--:--'}
+          </time>
         </div>
         <Link href="/facility-report"
-          className="flex items-center justify-between w-full h-11 rounded-2xl bg-amber-50 border-2 border-amber-200 px-4 text-amber-700 text-sm font-bold active:scale-[0.98] transition-transform">
-          <span>📋 시설 신문고</span>
-          <span className="text-amber-400 text-xs">→</span>
+          className="flex items-center justify-between w-full h-11 rounded-2xl bg-gray-50 border-2 border-gray-200 px-4 text-gray-500 text-sm font-bold active:scale-[0.98] transition-transform">
+          <span>🔒 시설 신문고</span>
+          <span className="text-gray-400 text-xs">준비 중</span>
         </Link>
-        <p className="text-center text-[11px] text-gray-300 pt-1">
+        <p className="text-center text-[11px] text-gray-600 pt-1">
           <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-400 transition-colors">
             개인정보처리방침
           </Link>
@@ -373,6 +396,7 @@ export default function HomePage() {
           onSessionChange={setActiveBooking}
         />
       )}
+
 
       {/* ── 온보딩 (신규 사용자) ── */}
       {isNew && suggestedNickname && (

@@ -61,6 +61,9 @@ _reservation_gate: asyncio.Semaphore | None = None
 _reservation_gate_loop: asyncio.AbstractEventLoop | None = None
 _tag_sync_gate: asyncio.Semaphore | None = None
 _tag_sync_gate_loop: asyncio.AbstractEventLoop | None = None
+# 같은 예약에 대한 태그 확인·취소·반납이 서로 덮어쓰지 않도록
+# 예약 ID별로 직렬화한다. 값은 [lock, waiter_count]다.
+_action_gates: dict[tuple[int, str], list] = {}
 
 
 def _kiosk_reservation_gate() -> asyncio.Semaphore:
@@ -81,34 +84,69 @@ def _kiosk_tag_sync_gate() -> asyncio.Semaphore:
     return _tag_sync_gate
 
 
+@asynccontextmanager
+async def _reservation_action_gate(reservation_id: str):
+    """같은 예약의 상태 변경과 학교 요청을 한 번에 하나씩 수행한다."""
+    key = (id(asyncio.get_running_loop()), reservation_id)
+    entry = _action_gates.get(key)
+    if entry is None:
+        entry = [asyncio.Lock(), 0]
+        _action_gates[key] = entry
+    entry[1] += 1
+    acquired = False
+    try:
+        await entry[0].acquire()
+        acquired = True
+        yield
+    finally:
+        if acquired:
+            entry[0].release()
+        entry[1] -= 1
+        if entry[1] == 0 and _action_gates.get(key) is entry:
+            _action_gates.pop(key, None)
+
+
 async def _mark_tagged_active(record: reservations.Reservation) -> bool:
     """키오스크가 태그 완료를 보이면 pending_tag를 active로 단 한 번 전이한다."""
-    try:
-        async with _kiosk_tag_sync_gate():
-            result = await booking.active_once(record.student_id, record.corner_no, record.kiosk_booking_no)
-    except httpx.HTTPError as exc:
-        log.warning("자동 태그 상태 확인 실패 | room=%s error=%s", record.room_no, exc)
-        return False
-    if not result.get("active"):
-        return False
-    active_record = reservations.transition(record.id, expected_status="pending_tag", status="active")
-    if not active_record:
-        return False
-    await collector.mark_active(active_record.corner_no, active_record.room_no,
-                                start_at=active_record.start_at, end_at=active_record.end_at)
-    if AUTO_RETURN_ENABLED:
-        await auto_return.register(active_record.uid, active_record.student_id, active_record.corner_no,
-                                   active_record.room_no, due_at=active_record.end_at,
-                                   booking_no=active_record.kiosk_booking_no)
-    log.info("태그 자동 확인 완료 | room=%s", active_record.room_no)
-    return True
+    async with _reservation_action_gate(record.id):
+        current = reservations.get(record.id)
+        if not current or current.status != "pending_tag":
+            return False
+        try:
+            async with _kiosk_tag_sync_gate():
+                result = await booking.active_once(current.student_id, current.corner_no, current.kiosk_booking_no)
+        except httpx.HTTPError as exc:
+            log.warning("자동 태그 상태 확인 실패 | room=%s error=%s", current.room_no, exc)
+            return False
+        if not result.get("active"):
+            return False
+        active_record = reservations.transition(current.id, expected_status="pending_tag", status="active")
+        if not active_record:
+            return False
+        await collector.mark_active(active_record.corner_no, active_record.room_no,
+                                    start_at=active_record.start_at, end_at=active_record.end_at,
+                                    reservation_id=active_record.id)
+        if AUTO_RETURN_ENABLED:
+            await auto_return.register(active_record.uid, active_record.student_id, active_record.corner_no,
+                                       active_record.room_no, due_at=active_record.end_at,
+                                       booking_no=active_record.kiosk_booking_no,
+                                       reservation_id=active_record.id)
+        log.info("태그 자동 확인 완료 | room=%s", active_record.room_no)
+        return True
 
 
 async def sync_pending_tags_once() -> int:
     """사용자가 앱의 확인 버튼을 누르지 않아도 태그 상태를 동기화한다."""
     expired = reservations.expire_pending()
     for record in expired:
-        await collector.clear_reserved(record.corner_no, record.room_no)
+        await collector.clear_reserved(record.corner_no, record.room_no, reservation_id=record.id)
+    if expired:
+        # 미태그 자동 취소/이용 종료도 수동 취소와 동일하게
+        # 해당 코너만 즉시 다시 읽어 잔류 선점 표시를 없앤다.
+        await asyncio.gather(*(
+            collector.refresh_corner_now(corner_no)
+            for corner_no in sorted({record.corner_no for record in expired})
+        ))
 
     now = kst_now()
     pending = [record for record in reservations.open_reservations()
@@ -135,13 +173,16 @@ async def lifespan(app: FastAPI):
     # 재시작 후에도 이미 확정된 예약이 공실로 잠깐 보이지 않도록 복원한다.
     for record in reservations.open_reservations():
         if record.status == "active":
-            await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at, end_at=record.end_at)
+            await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
+                                        end_at=record.end_at, reservation_id=record.id)
             if AUTO_RETURN_ENABLED:
                 await auto_return.register(record.uid, record.student_id, record.corner_no, record.room_no,
-                                           due_at=record.end_at, booking_no=record.kiosk_booking_no)
+                                           due_at=record.end_at, booking_no=record.kiosk_booking_no,
+                                           reservation_id=record.id)
         else:
             await collector.mark_reserved(record.corner_no, record.room_no, start_at=record.start_at,
-                                          end_at=record.end_at, tag_deadline=record.tag_deadline)
+                                          end_at=record.end_at, tag_deadline=record.tag_deadline,
+                                          reservation_id=record.id)
     return_task = asyncio.create_task(auto_return.scheduler_loop()) if AUTO_RETURN_ENABLED else None
     log.info("백그라운드 폴링 시작 (%d초 간격)", interval)
     yield
@@ -391,7 +432,8 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
                 result["reservation"] = _reservation_payload(record)
                 # 다음 정기 폴링 전에도 다른 사용자 화면에 선점 상태를 알린다.
                 await collector.mark_reserved(data.corner_no, data.room_no, start_at=record.start_at,
-                                              end_at=record.end_at, tag_deadline=record.tag_deadline)
+                                              end_at=record.end_at, tag_deadline=record.tag_deadline,
+                                              reservation_id=record.id)
             else:
                 reservations.fail(intent.id)
             return result
@@ -425,46 +467,52 @@ async def reservation_result(data: BookingResultRequest, user: dict = Depends(cu
 async def active_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
     claims = verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
     _require_bound_student(user, data.student_id)
-    record = reservations.open_for_uid(user["uid"])
-    if not record or record.id != claims.get("reservation"):
-        return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
-    # 태그 동기화 작업이 이미 active로 전환한 뒤에도 브라우저 localStorage에는
-    # 이전 tag 단계가 남아 있을 수 있다. 이 경우 키오스크를 다시 조회하지 않고
-    # 반납 화면을 복원한다.
-    if record.status == "active":
-        return {
-            "success": True,
-            "active": True,
-            "booking_no": record.kiosk_booking_no,
-            "room_no": record.room_no,
-            "message": f"태그 인증된 {record.room_no}호 사용을 확인했습니다.",
-            "reservation": _reservation_payload(record),
-        }
-    if record.status != "pending_tag":
-        return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
-    if kst_now() < record.start_at:
-        return {
-            "success": False,
-            "active": False,
-            "message": f"{record.start_at.strftime('%H:%M')}부터 학생증을 태그한 뒤 확인할 수 있습니다.",
-        }
-    if kst_now() > record.tag_deadline + reservations.PENDING_TAG_GRACE:
-        reservations.set_status(record.id, "expired")
-        await collector.clear_reserved(record.corner_no, record.room_no)
-        return {"success": False, "active": False, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
-    try:
-        result = await booking.active(data.student_id, data.corner_no, record.kiosk_booking_no)
-        if result.get("active"):
-            record = reservations.set_status(record.id, "active") or record
-            await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at, end_at=record.end_at)
-            if AUTO_RETURN_ENABLED:
-                await auto_return.register(record.uid, record.student_id, record.corner_no, record.room_no,
-                                           due_at=record.end_at, booking_no=record.kiosk_booking_no)
-            result["reservation"] = _reservation_payload(record)
-        return result
-    except httpx.HTTPError as exc:
-        log.warning("태그 확인 실패: %s", exc)
-        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+    reservation_id = str(claims.get("reservation", ""))
+    async with _reservation_action_gate(reservation_id):
+        record = reservations.open_for_uid(user["uid"])
+        if not record or record.id != reservation_id:
+            return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
+        # 태그 동기화 작업이 이미 active로 전환한 뒤에도 브라우저에는
+        # 이전 tag 단계가 남을 수 있으므로 키오스크 재조회 없이 복원한다.
+        if record.status == "active":
+            return {
+                "success": True, "active": True, "booking_no": record.kiosk_booking_no,
+                "room_no": record.room_no,
+                "message": f"태그 인증된 {record.room_no}호 사용을 확인했습니다.",
+                "reservation": _reservation_payload(record),
+            }
+        if record.status != "pending_tag":
+            return {"success": False, "active": False, "message": "인증대기 예약을 찾지 못했습니다."}
+        if kst_now() < record.start_at:
+            return {
+                "success": False, "active": False,
+                "message": f"{record.start_at.strftime('%H:%M')}부터 학생증을 태그한 뒤 확인할 수 있습니다.",
+            }
+        if kst_now() > record.tag_deadline + reservations.PENDING_TAG_GRACE:
+            reservations.transition(record.id, expected_status="pending_tag", status="expired")
+            await collector.clear_reserved(record.corner_no, record.room_no, reservation_id=record.id)
+            await collector.refresh_corner_now(record.corner_no)
+            return {"success": False, "active": False, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
+        try:
+            result = await booking.active(data.student_id, data.corner_no, record.kiosk_booking_no)
+            if result.get("active"):
+                active_record = reservations.transition(record.id, expected_status="pending_tag", status="active")
+                if not active_record:
+                    return {"success": False, "active": False, "message": "예약 상태가 변경되어 다시 확인해 주세요."}
+                await collector.mark_active(active_record.corner_no, active_record.room_no,
+                                            start_at=active_record.start_at, end_at=active_record.end_at,
+                                            reservation_id=active_record.id)
+                if AUTO_RETURN_ENABLED:
+                    await auto_return.register(
+                        active_record.uid, active_record.student_id, active_record.corner_no,
+                        active_record.room_no, due_at=active_record.end_at,
+                        booking_no=active_record.kiosk_booking_no, reservation_id=active_record.id,
+                    )
+                result["reservation"] = _reservation_payload(active_record)
+            return result
+        except httpx.HTTPError as exc:
+            log.warning("태그 확인 실패: %s", exc)
+            raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
 
 
 @app.post("/booking/import-active")
@@ -515,7 +563,8 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
         record = reservations.set_status(record.id, "active") or record
         result["return_token"] = issue_return_token(user["uid"], data.student_id, data.corner_no, data.room_no, record.id)
         result["reservation"] = _reservation_payload(record)
-        await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at, end_at=record.end_at)
+        await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
+                                    end_at=record.end_at, reservation_id=record.id)
         return result
     except httpx.HTTPError as exc:
         reservations.fail(intent.id)
@@ -530,18 +579,25 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
 async def return_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
     claims = verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
     _require_bound_student(user, data.student_id)
+    async with _reservation_action_gate(str(claims.get("reservation", ""))):
+        return await _return_booking_locked(data, user, claims)
+
+
+async def _return_booking_locked(data: BookingActionRequest, user: dict, claims: dict):
     record = reservations.open_for_uid(user["uid"])
     if not record or record.id != claims.get("reservation") or record.status != "active":
         raise HTTPException(409, "태그 인증된 사용 중 예약을 찾지 못했습니다.")
     try:
         result = await booking.return_room(data.student_id, data.corner_no, record.kiosk_booking_no)
         if result.get("success") and AUTO_RETURN_ENABLED:
-            await auto_return.forget(user["uid"], data.corner_no)
+            await auto_return.forget(user["uid"], data.corner_no, reservation_id=record.id)
         if result.get("success"):
-            await collector.clear_reserved(data.corner_no, str(claims.get("room", "")))
             reservations.set_status(record.id, "returned")
-            # 원본 키오스크 상태를 다시 읽어 카드의 선점 표시를 빠르게 해제한다.
-            asyncio.create_task(collector.refresh_now())
+            await collector.clear_reserved(data.corner_no, str(claims.get("room", "")),
+                                           reservation_id=record.id)
+            # 응답 전에 해당 코너만 원본에서 다시 읽어, 반납 후
+            # 예전 '사용중' 카드가 남은 채로 사용자 화면에 돌아가지 않게 한다.
+            await collector.refresh_corner_now(data.corner_no)
         return result
     except httpx.HTTPError as exc:
         log.warning("반납 연동 실패: %s", exc)
@@ -552,14 +608,19 @@ async def return_booking(data: BookingActionRequest, user: dict = Depends(curren
 async def cancel_booking(data: BookingActionRequest, user: dict = Depends(current_user)):
     claims = verify_return_token(data.return_token, user["uid"], data.student_id, data.corner_no)
     _require_bound_student(user, data.student_id)
+    async with _reservation_action_gate(str(claims.get("reservation", ""))):
+        return await _cancel_booking_locked(data, user, claims)
+
+
+async def _cancel_booking_locked(data: BookingActionRequest, user: dict, claims: dict):
     record = reservations.open_for_uid(user["uid"])
     # 태그 마감 직후에는 expire_pending()이 이미 DB 상태를 expired로 바꾼다.
     # 이 경우도 사용자 입장에서는 '취소 완료'이므로 로컬 화면을 정상적으로 닫는다.
     if not record:
         expired = reservations.get(str(claims.get("reservation", "")))
         if expired and expired.uid == user["uid"] and expired.status == "expired":
-            await collector.clear_reserved(expired.corner_no, expired.room_no)
-            asyncio.create_task(collector.refresh_now())
+            await collector.clear_reserved(expired.corner_no, expired.room_no, reservation_id=expired.id)
+            await collector.refresh_corner_now(expired.corner_no)
             return {"success": True, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
     if not record or record.id != claims.get("reservation") or record.status != "pending_tag":
         raise HTTPException(409, "취소할 인증대기 예약을 찾지 못했습니다.")
@@ -568,10 +629,16 @@ async def cancel_booking(data: BookingActionRequest, user: dict = Depends(curren
         log.info("취소 결과 | corner=%d success=%s message=%s",
                  data.corner_no, result.get("success"), result.get("message", ""))
         if result.get("success"):
-            await collector.clear_reserved(data.corner_no, str(claims.get("room", "")))
             reservations.set_status(record.id, "cancelled")
-            # 취소 직후 학교 서버 원본으로 상태를 다시 읽어 예약 선점을 해제한다.
-            asyncio.create_task(collector.refresh_now())
+            if AUTO_RETURN_ENABLED:
+                # 취소와 태그 자동 확인이 겹친 극소수 경합에서 자동 반납
+                # 대기열이 등록되었더라도 취소 성공 후에는 반드시 제거한다.
+                await auto_return.forget(record.uid, record.corner_no, reservation_id=record.id)
+            await collector.clear_reserved(data.corner_no, str(claims.get("room", "")),
+                                           reservation_id=record.id)
+            # 학교 취소 결과가 반영된 코너만 응답 전에 갱신한다.
+            # 동시에 다른 사용자가 예약했다면 공실로 오표시하지 않는다.
+            await collector.refresh_corner_now(data.corner_no)
         return result
     except httpx.HTTPError as exc:
         log.warning("예약 취소 연동 실패: %s", exc)

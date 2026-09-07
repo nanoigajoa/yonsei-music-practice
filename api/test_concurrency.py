@@ -103,7 +103,9 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.set_status("active-one", "active")
         token = issue_return_token("user", "2022172528", 1, "119", "active-one")
         action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
-        with patch.object(main.booking, "return_room", AsyncMock(return_value={"success": True, "message": "반납 완료"})):
+        with patch.object(
+            main.booking, "return_room", AsyncMock(return_value={"success": True, "message": "반납 완료"})
+        ), patch.object(main.collector, "refresh_corner_now", AsyncMock(return_value=True)):
             returned = await main.return_booking(action, user={"uid": "user"})
         self.assertTrue(returned["success"])
 
@@ -117,6 +119,186 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             )
         self.assertTrue(result["success"])
         reserve.assert_awaited_once()
+
+    async def test_cancel_pending_then_immediate_new_reservation_succeeds(self):
+        """태그 전 취소는 학교/로컬 선점을 풀고 즉시 재예약할 수 있어야 한다."""
+        start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528", student_key=key,
+            corner_no=1, room_no="119",
+        )
+        record = reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        token = issue_return_token("user", "2022172528", 1, "119", record.id)
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+
+        with patch.object(
+            main.booking, "cancel", AsyncMock(return_value={"success": True, "message": "예약 취소 완료"})
+        ) as cancel, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh:
+            cancelled = await main.cancel_booking(action, user={"uid": "user"})
+        self.assertTrue(cancelled["success"])
+        self.assertEqual(reservations.get(record.id).status, "cancelled")
+        self.assertIsNone(reservations.open_for_uid("user"))
+        cancel.assert_awaited_once()
+        refresh.assert_awaited_once_with(1)
+
+        with patch.object(main.booking, "reserve", AsyncMock(return_value={
+            "success": True, "message": "예약 완료", "start_at": start.isoformat(),
+            "booking_no": "new-booking",
+        })) as reserve:
+            result = await main.reserve_room(
+                main.BookingRequest(
+                    student_id="2022172528", corner_no=1, room_no="119", limit_time=120,
+                ),
+                user={"uid": "user"},
+            )
+        self.assertTrue(result["success"])
+        reserve.assert_awaited_once()
+
+    async def test_fifty_simultaneous_cancels_call_school_once(self):
+        start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528", student_key=key,
+            corner_no=1, room_no="119",
+        )
+        record = reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        token = issue_return_token("user", "2022172528", 1, "119", record.id)
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+
+        async def school_cancel(*_args):
+            await asyncio.sleep(0.02)
+            return {"success": True, "message": "예약 취소 완료"}
+
+        async def cancel_once() -> str:
+            try:
+                result = await main.cancel_booking(action, user={"uid": "user"})
+                return "success" if result.get("success") else "failed"
+            except HTTPException as exc:
+                return f"http_{exc.status_code}"
+
+        with patch.object(main.booking, "cancel", AsyncMock(side_effect=school_cancel)) as cancel, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh:
+            results = await asyncio.gather(*(cancel_once() for _ in range(50)))
+
+        self.assertEqual(results.count("success"), 1)
+        self.assertEqual(results.count("http_409"), 49)
+        cancel.assert_awaited_once()
+        refresh.assert_awaited_once_with(1)
+
+    async def test_school_cancel_failure_keeps_pending_reservation_locked(self):
+        start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528", student_key=key,
+            corner_no=1, room_no="119",
+        )
+        record = reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        token = issue_return_token("user", "2022172528", 1, "119", record.id)
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+
+        with patch.object(main.booking, "cancel", AsyncMock(return_value={
+            "success": False, "message": "취소 처리에 실패했습니다.",
+        })), patch.object(main.collector, "clear_reserved", AsyncMock()) as clear, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock()
+        ) as refresh:
+            result = await main.cancel_booking(action, user={"uid": "user"})
+
+        self.assertFalse(result["success"])
+        self.assertEqual(reservations.get(record.id).status, "pending_tag")
+        clear.assert_not_awaited()
+        refresh.assert_not_awaited()
+
+    async def test_cancel_wins_race_with_tag_sync_and_cannot_be_resurrected(self):
+        start = datetime.now().replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528", student_key=key,
+            corner_no=1, room_no="119",
+        )
+        record = reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        token = issue_return_token("user", "2022172528", 1, "119", record.id)
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+        cancel_started = asyncio.Event()
+        release_cancel = asyncio.Event()
+
+        async def school_cancel(*_args):
+            cancel_started.set()
+            await release_cancel.wait()
+            return {"success": True, "message": "예약 취소 완료"}
+
+        with patch.object(main.booking, "cancel", AsyncMock(side_effect=school_cancel)), patch.object(
+            main.booking, "active_once", AsyncMock(return_value={"success": True, "active": True})
+        ) as active, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ):
+            cancel_task = asyncio.create_task(main.cancel_booking(action, user={"uid": "user"}))
+            await cancel_started.wait()
+            tag_task = asyncio.create_task(main._mark_tagged_active(record))
+            release_cancel.set()
+            cancelled, tagged = await asyncio.gather(cancel_task, tag_task)
+
+        self.assertTrue(cancelled["success"])
+        self.assertFalse(tagged)
+        self.assertEqual(reservations.get(record.id).status, "cancelled")
+        active.assert_not_awaited()
+
+    async def test_tag_sync_wins_race_and_late_cancel_cannot_cancel_active_use(self):
+        start = datetime.now().replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528", student_key=key,
+            corner_no=1, room_no="119",
+        )
+        record = reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        token = issue_return_token("user", "2022172528", 1, "119", record.id)
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+        tag_started = asyncio.Event()
+        release_tag = asyncio.Event()
+
+        async def school_active(*_args):
+            tag_started.set()
+            await release_tag.wait()
+            return {"success": True, "active": True}
+
+        async def cancel_once() -> int:
+            try:
+                await main.cancel_booking(action, user={"uid": "user"})
+                return 200
+            except HTTPException as exc:
+                return exc.status_code
+
+        with patch.object(main.booking, "active_once", AsyncMock(side_effect=school_active)), patch.object(
+            main.booking, "cancel", AsyncMock()
+        ) as cancel, patch.object(main.collector, "mark_active", AsyncMock()):
+            tag_task = asyncio.create_task(main._mark_tagged_active(record))
+            await tag_started.wait()
+            cancel_task = asyncio.create_task(cancel_once())
+            release_tag.set()
+            tagged, cancel_status = await asyncio.gather(tag_task, cancel_task)
+
+        self.assertTrue(tagged)
+        self.assertEqual(cancel_status, 409)
+        self.assertEqual(reservations.get(record.id).status, "active")
+        cancel.assert_not_awaited()
 
     async def test_import_restores_existing_active_booking_without_new_kiosk_lookup(self):
         start = datetime.now().replace(second=0, microsecond=0)

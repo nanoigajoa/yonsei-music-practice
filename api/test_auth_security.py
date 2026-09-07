@@ -111,13 +111,14 @@ class BookingSecurityTest(unittest.TestCase):
         reservations.set_status(record.id, "active")
         token = issue_return_token("user-a", "2022172528", 1, "119", record.id)
         with patch.object(main.booking, "return_room", AsyncMock(return_value={"success": True})) as mocked, patch.object(
-            main.collector, "refresh_now", AsyncMock()
-        ):
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh:
             response = self.client.post("/booking/return", json={
                 "student_id": "2022172528", "corner_no": 1, "return_token": token,
             })
         self.assertEqual(response.status_code, 200)
         mocked.assert_awaited_once()
+        refresh.assert_awaited_once_with(1)
 
     def test_return_rejects_other_google_user(self):
         token = issue_return_token("user-b", "2022172528", 1, "119")
@@ -173,13 +174,14 @@ class BookingSecurityTest(unittest.TestCase):
                              room_no="119")
         reservations.finalize("expired-one", start_at=past_start, duration_min=120, kiosk_booking_no="old")
         token = issue_return_token("user-a", "2022172528", 1, "119", "expired-one")
-        with patch.object(main.collector, "refresh_now", AsyncMock()):
+        with patch.object(main.collector, "refresh_corner_now", AsyncMock(return_value=True)) as refresh:
             response = self.client.post("/booking/cancel", json={
                 "student_id": "2022172528", "corner_no": 1, "return_token": token,
             })
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         self.assertIn("자동 취소", response.json()["message"])
+        refresh.assert_awaited_once_with(1)
 
 
 class LoginRequiredTest(unittest.TestCase):

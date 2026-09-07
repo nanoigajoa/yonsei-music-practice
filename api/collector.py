@@ -177,6 +177,10 @@ _pending_reservations: Dict[tuple[int, str], dict] = {}
 # 함께 기다린다.
 _refresh_gate = asyncio.Lock()
 _manual_refresh_task: asyncio.Task[None] | None = None
+# 취소/반납 직후 같은 코너를 여러 사용자가 동시에 갱신해도
+# 원본 조회는 코너당 한 번만 수행한다.
+_corner_refresh_tasks: Dict[int, asyncio.Task[bool]] = {}
+_corner_versions: Dict[int, int] = {}
 # ──────────────────────────────────────────────────────
 
 
@@ -195,12 +199,14 @@ def unsubscribe(q: asyncio.Queue) -> None:
 
 
 async def mark_reserved(corner_no: int, room_no: str, *, start_at: datetime,
-                        end_at: datetime, tag_deadline: datetime, status: str = "pending_tag") -> None:
+                        end_at: datetime, tag_deadline: datetime, status: str = "pending_tag",
+                        reservation_id: str | None = None) -> None:
     """예약 성공 직후부터 키오스크 반영 전까지 인증대기/사용중을 보인다."""
     global _state
     suffix = f"{room_no}호"
     _pending_reservations[(corner_no, room_no)] = {
-        "start_at": start_at, "end_at": end_at, "tag_deadline": tag_deadline, "status": status,
+        "start_at": start_at, "end_at": end_at, "tag_deadline": tag_deadline,
+        "status": status, "reservation_id": reservation_id,
     }
     if _state is None:
         return
@@ -230,14 +236,33 @@ async def mark_reserved(corner_no: int, room_no: str, *, start_at: datetime,
     await _notify()
 
 
-async def clear_reserved(corner_no: int, room_no: str) -> None:
-    """예약 취소 성공 후 선점 표시를 즉시 해제한다."""
-    _pending_reservations.pop((corner_no, room_no), None)
+async def clear_reserved(corner_no: int, room_no: str, *, reservation_id: str | None = None) -> bool:
+    """예약 취소 성공 후 앱 전용 선점을 해제한다.
+
+    현재 Room을 무조건 공실로 바꾸지는 않는다. 그 사이 다른 사용자가
+    예약했을 수도 있으므로 refresh_corner_now()가 학교 원본으로 확정한다.
+    """
+    key = (corner_no, room_no)
+    overlay = _pending_reservations.get(key)
+    if overlay is None:
+        # 서버 재시작 후에는 메모리 오버레이가 없어도 학교 취소/반납
+        # 성공 후 상태 갱신은 필요하다.
+        _corner_versions[corner_no] = _corner_versions.get(corner_no, 0) + 1
+        return False
+    if reservation_id is not None and overlay.get("reservation_id") != reservation_id:
+        # 느게 도착한 예전 취소/반납이 이미 새로 예약된 같은 방의
+        # 선점을 지우지 못하게 한다.
+        return False
+    _pending_reservations.pop(key, None)
+    _corner_versions[corner_no] = _corner_versions.get(corner_no, 0) + 1
+    return True
 
 
-async def mark_active(corner_no: int, room_no: str, *, start_at: datetime, end_at: datetime) -> None:
+async def mark_active(corner_no: int, room_no: str, *, start_at: datetime, end_at: datetime,
+                      reservation_id: str | None = None) -> None:
     await mark_reserved(corner_no, room_no, start_at=start_at, end_at=end_at,
-                        tag_deadline=start_at + timedelta(minutes=10), status="active")
+                        tag_deadline=start_at + timedelta(minutes=10), status="active",
+                        reservation_id=reservation_id)
 
 
 async def _notify() -> None:
@@ -280,6 +305,105 @@ async def _fetch_corner(client: httpx.AsyncClient, corner_no: int) -> List[Room]
     return all_rooms
 
 
+def _apply_pending_overlays(rooms: List[Room]) -> List[Room]:
+    """학교 원본 위에 앱이 확정한 인증대기/사용중 선점을 적용한다."""
+    now_local = kst_now()
+    result = list(rooms)
+    for key, overlay in list(_pending_reservations.items()):
+        expires_at = (
+            overlay["tag_deadline"] + timedelta(seconds=PENDING_TAG_GRACE_SECONDS)
+            if overlay["status"] == "pending_tag" else overlay["end_at"]
+        )
+        if expires_at <= now_local:
+            _pending_reservations.pop(key, None)
+            continue
+        corner_no, room_no = key
+        suffix = f"{room_no}호"
+        for index, room in enumerate(result):
+            if room.corner_no == corner_no and room.name.endswith(suffix):
+                result[index] = room.model_copy(update={
+                    "occupied": True,
+                    "handover": False,
+                    "available_periods": [],
+                    "reservation_state": overlay["status"],
+                    "reservation_start": overlay["start_at"].strftime("%H:%M"),
+                    "tag_deadline": overlay["tag_deadline"].strftime("%H:%M"),
+                })
+                break
+    return result
+
+
+def _status_with_rooms(rooms: List[Room]) -> StatusResponse:
+    return StatusResponse(
+        updated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        total=len(rooms),
+        occupied_count=sum(1 for room in rooms if room.occupied),
+        available_count=sum(1 for room in rooms if room.available_periods),
+        rooms=rooms,
+    )
+
+
+async def _refresh_one_corner(corner_no: int) -> bool:
+    """취소/반납한 방이 속한 코너만 원본에서 다시 읽는다."""
+    global _state
+    # 전체 폴링과 직렬화해, 취소 전에 읽은 오래된 전체 결과가
+    # 취소 후의 코너 결과를 다시 덮어쓰지 못하게 한다.
+    async with _refresh_gate:
+        async with httpx.AsyncClient(headers=HEADERS) as client:
+            fetched = await _fetch_corner(client, corner_no)
+        if not fetched:
+            # 조회 실패를 공실로 오인하는 것보다 기존 상태 유지가 안전하다.
+            log.warning("corner_no=%d 즉시 갱신 실패 — 기존 상태 유지", corner_no)
+            return False
+
+        fetched = _apply_pending_overlays(fetched)
+        async with _lock:
+            if _state is None:
+                return False
+            rooms: List[Room] = []
+            inserted = False
+            for room in _state.rooms:
+                if room.corner_no != corner_no:
+                    rooms.append(room)
+                elif not inserted:
+                    rooms.extend(fetched)
+                    inserted = True
+            if not inserted:
+                rooms.extend(fetched)
+            _state = _status_with_rooms(rooms)
+
+        log.info("corner_no=%d 즉시 갱신 완료 | %d개", corner_no, len(fetched))
+        await _notify()
+        return True
+
+
+async def _refresh_corner_until_current(corner_no: int) -> bool:
+    """조회 도중 추가 취소가 생기면 가장 최신 세대까지 다시 읽는다."""
+    while True:
+        version = _corner_versions.get(corner_no, 0)
+        refreshed = await _refresh_one_corner(corner_no)
+        if _corner_versions.get(corner_no, 0) == version:
+            return refreshed
+
+
+async def refresh_corner_now(corner_no: int) -> bool:
+    """동시 요청을 코너당 하나의 최신 학교 조회 작업으로 합친다."""
+    task = _corner_refresh_tasks.get(corner_no)
+    if task is None or task.done():
+        task = asyncio.create_task(_refresh_corner_until_current(corner_no))
+        _corner_refresh_tasks[corner_no] = task
+    try:
+        return await asyncio.shield(task)
+    except Exception:
+        # 학교에서 취소/반납이 이미 성공했다면 후속 화면 갱신
+        # 실패가 그 성공 응답을 500으로 바꾸어서는 안 된다.
+        log.exception("corner_no=%d 즉시 갱신 오류", corner_no)
+        return False
+    finally:
+        if task.done() and _corner_refresh_tasks.get(corner_no) is task:
+            _corner_refresh_tasks.pop(corner_no, None)
+
+
 async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
     global _state
     all_rooms: List[Room] = []
@@ -293,44 +417,14 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
         log.warning("방 목록이 비어있습니다 — 키오스크 접근 불가 또는 push 모드. 기존 상태 유지.")
         return
 
-    now_local = kst_now()
-    for key, overlay in list(_pending_reservations.items()):
-        expires_at = (
-            overlay["tag_deadline"] + timedelta(seconds=PENDING_TAG_GRACE_SECONDS)
-            if overlay["status"] == "pending_tag" else overlay["end_at"]
-        )
-        if expires_at <= now_local:
-            _pending_reservations.pop(key, None)
-            continue
-        corner_no, room_no = key
-        suffix = f"{room_no}호"
-        for index, room in enumerate(all_rooms):
-            if room.corner_no == corner_no and room.name.endswith(suffix):
-                all_rooms[index] = room.model_copy(update={
-                    "occupied": True,
-                    "handover": False,
-                    "available_periods": [],
-                    "reservation_state": overlay["status"],
-                    "reservation_start": overlay["start_at"].strftime("%H:%M"),
-                    "tag_deadline": overlay["tag_deadline"].strftime("%H:%M"),
-                })
-                break
-
-    occupied_count = sum(1 for r in all_rooms if r.occupied)
-    available_count = sum(1 for r in all_rooms if r.available_periods)
+    all_rooms = _apply_pending_overlays(all_rooms)
 
     async with _lock:
-        _state = StatusResponse(
-            updated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            total=len(all_rooms),
-            occupied_count=occupied_count,
-            available_count=available_count,
-            rooms=all_rooms,
-        )
+        _state = _status_with_rooms(all_rooms)
 
     log.info(
         "갱신 완료 | 전체 %d개 | 사용중 %d | 예약가능 %d",
-        len(all_rooms), occupied_count, available_count,
+        len(all_rooms), _state.occupied_count, _state.available_count,
     )
     await _notify()
 

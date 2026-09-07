@@ -24,6 +24,7 @@ class PendingReturn:
     room_no: str
     due_at: datetime
     booking_no: str | None = None
+    reservation_id: str | None = None
     last_attempt: float = 0
 
 
@@ -32,17 +33,21 @@ _lock = asyncio.Lock()
 
 
 async def register(uid: str, student_id: str, corner_no: int, room_no: str, *, due_at: datetime,
-                   booking_no: str | None = None) -> None:
+                   booking_no: str | None = None, reservation_id: str | None = None) -> None:
     async with _lock:
         _pending[(uid, corner_no, room_no)] = PendingReturn(
             uid=uid, student_id=student_id, corner_no=corner_no, room_no=room_no,
-            due_at=kst_normalize(due_at), booking_no=booking_no,
+            due_at=kst_normalize(due_at), booking_no=booking_no, reservation_id=reservation_id,
         )
 
 
-async def forget(uid: str, corner_no: int) -> None:
+async def forget(uid: str, corner_no: int, *, reservation_id: str | None = None) -> None:
     async with _lock:
-        for key in [key for key in _pending if key[0] == uid and key[1] == corner_no]:
+        for key in [
+            key for key, item in _pending.items()
+            if key[0] == uid and key[1] == corner_no
+            and (reservation_id is None or item.reservation_id == reservation_id)
+        ]:
             _pending.pop(key, None)
 
 
