@@ -161,6 +161,14 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         reserve.assert_awaited_once()
 
+        newer = reservations.open_for_uid("user")
+        with patch.object(main.booking, "cancel", AsyncMock()) as old_cancel:
+            repeated = await main.cancel_booking(action, user={"uid": "user"})
+        self.assertTrue(repeated["success"])
+        old_cancel.assert_not_awaited()
+        self.assertEqual(reservations.open_for_uid("user").id, newer.id)
+        self.assertEqual(reservations.open_for_uid("user").kiosk_booking_no, "new-booking")
+
     async def test_fifty_simultaneous_cancels_call_school_once(self):
         start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
         key = student_key("2022172528")

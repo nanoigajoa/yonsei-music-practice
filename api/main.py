@@ -37,6 +37,7 @@ from clock import now as kst_now, parse as parse_kst
 PUSH_SECRET = os.getenv("PUSH_SECRET", "")
 BOOKING_ENABLED = os.getenv("BOOKING_ENABLED", "false").lower() == "true"
 AUTO_RETURN_ENABLED = os.getenv("AUTO_RETURN_ENABLED", "false").lower() == "true"
+DAILY_RETURN_ENABLED = BOOKING_ENABLED and os.getenv("DAILY_RETURN_ENABLED", "true").lower() == "true"
 MAX_CONCURRENT_KIOSK_RESERVATIONS = max(1, int(os.getenv("MAX_CONCURRENT_KIOSK_RESERVATIONS", "3")))
 MAX_CONCURRENT_TAG_SYNC_CHECKS = max(1, int(os.getenv("MAX_CONCURRENT_TAG_SYNC_CHECKS", "3")))
 TAG_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("TAG_SYNC_INTERVAL_SECONDS", "5")))
@@ -265,11 +266,12 @@ async def lifespan(app: FastAPI):
             record = reservations.mark_uncertain(record.id) or record
         await _publish_reservation(record)
     return_task = asyncio.create_task(auto_return.scheduler_loop()) if AUTO_RETURN_ENABLED else None
+    daily_task = asyncio.create_task(auto_return.daily_scheduler_loop(_daily_return)) if DAILY_RETURN_ENABLED else None
     log.info("백그라운드 폴링 시작 (%d초 간격)", interval)
     try:
         yield
     finally:
-        tasks = [task, tag_task, recovery_task, notifications_task] + ([return_task] if return_task else [])
+        tasks = [task, tag_task, recovery_task, notifications_task] + ([return_task] if return_task else []) + ([daily_task] if daily_task else [])
         for running in tasks:
             running.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -414,7 +416,9 @@ async def health():
         "booking_enabled": BOOKING_ENABLED,
         "school_access_allowed": True,
         "community_enabled": True,
-        "auto_return_enabled": AUTO_RETURN_ENABLED,
+        "auto_return_enabled": AUTO_RETURN_ENABLED or DAILY_RETURN_ENABLED,
+        "daily_return_enabled": DAILY_RETURN_ENABLED,
+        "daily_return_time": "21:50" if DAILY_RETURN_ENABLED else None,
     }
 
 
@@ -801,8 +805,35 @@ def _sse(data: dict) -> str:
 
 def _reservation_payload(record: reservations.Reservation) -> dict:
     return {
+        "id": record.id,
         "status": record.status,
         "start_at": record.start_at.isoformat(),
         "end_at": record.end_at.isoformat(),
         "tag_deadline": record.tag_deadline.isoformat(),
     }
+
+
+async def _daily_return(reservation_id: str) -> bool:
+    async with _reservation_action_gate(reservation_id):
+        record = reservations.get(reservation_id)
+        current = kst_now()
+        if not record or not auto_return.daily_eligible(record, current):
+            return False
+        if not reservations.claim_daily_return(record.id, record.kiosk_booking_no, current):
+            return False
+        result = await booking.return_room(record.student_id, record.corner_no, record.kiosk_booking_no)
+        if not result.get("success"):
+            log.warning("21:50 자동 반납 미완료 | room=%s", record.room_no)
+            return False
+        reservations.confirm_daily_return(record.id, record.kiosk_booking_no)
+        await collector.clear_reserved(record.corner_no, record.room_no, reservation_id=record.id)
+        await collector.refresh_corner_now(record.corner_no)
+        return True
+
+
+@app.get("/announcements")
+async def announcements():
+    return {"daily_return_enabled": DAILY_RETURN_ENABLED, "items": [{
+        "id": "daily-return-2150-v1", "title": "21:50 자동 반납 안내",
+        "body": "21:50 이전에 시작한 이용 예약은 남은 시간과 관계없이 21:50부터 자동 반납해요. 완료 여부를 꼭 확인해 주세요.",
+    }] if DAILY_RETURN_ENABLED else []}

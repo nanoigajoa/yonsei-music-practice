@@ -227,13 +227,38 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_failure_text_is_not_success(self):
         for text, success in (("예약 취소 실패", False), ("취소 버튼", False), ("예약 취소되었습니다.", True)):
             client = AsyncMock()
-            client.get.side_effect = [Response(""), Response(""), Response(text)]
+            client.get.side_effect = [Response(""), Response(receipt(room="119")), Response(text)]
             client.post.return_value = Response(LOGIN_HTML)
             context = AsyncMock()
             context.__aenter__.return_value = client
             with patch.object(booking.httpx, "AsyncClient", return_value=context):
                 result = await booking.cancel("2022172528", 1, "119", "777")
             self.assertEqual(result["success"], success)
+
+    async def test_cancel_never_targets_unknown_or_different_booking(self):
+        for number, room in [(None, "119"), ("888", "119"), ("777", "1119")]:
+            client = AsyncMock()
+            client.get.return_value = Response(receipt(room=room))
+            context = AsyncMock(); context.__aenter__.return_value = client
+            with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(booking, "_login", AsyncMock()):
+                result = await booking.cancel("student", 1, "119", number)
+            self.assertFalse(result["success"])
+            self.assertEqual(client.get.await_count, 1)
+
+    async def test_return_requires_exact_active_booking_and_explicit_success(self):
+        for expected, actual, text, success in [
+            (None, "777", "반납 되었습니다", False),
+            ("777", "888", "반납 되었습니다", False),
+            ("777", None, "반납 되었습니다", False),
+            ("777", "777", "반납 되었습니다", True),
+            ("777", "777", "오류: 반납 되었습니다", False),
+        ]:
+            client = AsyncMock(); client.get.return_value = Response(text)
+            context = AsyncMock(); context.__aenter__.return_value = client
+            with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(booking, "_login", AsyncMock()), patch.object(booking, "_active_booking_no", AsyncMock(return_value=actual)):
+                result = await booking.return_room("student", 1, expected)
+            self.assertEqual(result["success"], success)
+            self.assertEqual(client.get.await_count, int(bool(expected) and expected == actual))
 
 
 if __name__ == "__main__":

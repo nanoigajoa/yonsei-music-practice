@@ -448,11 +448,12 @@ async def active_details(student_id: str, corner_no: int) -> dict:
 async def return_room(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:
     async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
-        number = booking_no or await _booking_no(client, corner_no)
-        if not number:
-            return {"success": False, "message": "활성 예약이 없습니다."}
+        number = await _active_booking_no(client, corner_no)
+        if not booking_no or number != booking_no:
+            return {"success": False, "message": "현재 사용 중인 예약번호가 일치하지 않습니다. 상태를 확인해 주세요."}
         result = await client.get(f"{BASE}/booking/return.php", params={"booking_no": number})
-    if "반납 되었습니다" in result.text:
+    result.raise_for_status()
+    if "반납 되었습니다" in result.text and not re.search(r"실패|오류|불가|할 수 없", result.text):
         return {"success": True, "message": "반납 완료"}
     return {"success": False, "message": "반납 처리에 실패했습니다."}
 
@@ -466,16 +467,16 @@ async def cancel(student_id: str, corner_no: int, room_no: str, booking_no: str 
             params={"corner_no": corner_no},
             headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
         )
+        page.raise_for_status()
         soup = BeautifulSoup(page.text, "html.parser")
-        number = booking_no
-        if not number:
-            for row in soup.select("tr"):
-                if f"{room_no}호" not in row.get_text():
-                    continue
-                cancel_link = row.find("a", onclick=re.compile(r"booking_del\(['\"](\d+)"))
-                if cancel_link:
-                    number = re.search(r"booking_del\(['\"](\d+)", cancel_link["onclick"]).group(1)
-                    break
+        number = None
+        for row in soup.select("tr"):
+            if not re.search(rf"(?<!\d){re.escape(room_no)}호", row.get_text()):
+                continue
+            for link in row.find_all("a", onclick=True):
+                match = re.search(r"booking_del\(['\"](\d+)", link["onclick"])
+                if match and booking_no and match.group(1) == booking_no:
+                    number = booking_no
         if not number:
             return {"success": False, "message": "취소할 예약을 찾지 못했습니다. 키오스크 상태를 확인해 주세요."}
         result = await client.get(

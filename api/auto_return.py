@@ -86,3 +86,43 @@ async def scheduler_loop() -> None:
 async def pending_count() -> int:
     async with _lock:
         return len(_pending)
+
+
+def daily_window(current: datetime) -> tuple[datetime, datetime]:
+    current = kst_normalize(current)
+    return (current.replace(hour=21, minute=50, second=0, microsecond=0),
+            current.replace(hour=22, minute=0, second=0, microsecond=0))
+
+
+def daily_eligible(record, current: datetime) -> bool:
+    cutoff, stop = daily_window(current)
+    return (cutoff <= current < stop and record.status == "active"
+            and bool(record.kiosk_booking_no) and bool(record.student_id)
+            and record.start_at < cutoff < record.end_at and current < record.end_at)
+
+
+async def process_daily(action, now: datetime | None = None) -> int:
+    import reservations
+    current = kst_normalize(now) if now else kst_now()
+    cutoff, stop = daily_window(current)
+    if not cutoff <= current < stop:
+        return 0
+    gate = asyncio.Semaphore(3)
+    async def run(record):
+        async with gate:
+            try:
+                return bool(await action(record.id))
+            except Exception:
+                log.exception("21:50 자동 반납 연결 실패")
+                return False
+    targets = [r for r in reservations.open_reservations() if daily_eligible(r, current)]
+    return sum(await asyncio.gather(*(run(r) for r in targets)))
+
+
+async def daily_scheduler_loop(action) -> None:
+    while True:
+        try:
+            await process_daily(action)
+        except Exception:
+            log.exception("21:50 자동 반납 점검 실패")
+        await asyncio.sleep(5)

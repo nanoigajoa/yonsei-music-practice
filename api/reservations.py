@@ -77,6 +77,8 @@ def _connection():
     if "dispatch_started" not in columns:
         # NULL은 배포 전 코드가 남긴 전송 여부 불명 기록이다.
         conn.execute("ALTER TABLE reservations ADD COLUMN dispatch_started INTEGER")
+    if "daily_return_attempt_at" not in columns:
+        conn.execute("ALTER TABLE reservations ADD COLUMN daily_return_attempt_at REAL")
     if "returned_at" not in columns:
         # Preserve legacy rows: an unknown historical return time stays NULL.
         conn.execute("ALTER TABLE reservations ADD COLUMN returned_at TEXT")
@@ -440,3 +442,20 @@ def practice_history(uid: str, *, period: str = "weekly", limit: int = 30, offse
     return {"sessions": sessions, "has_more": len(recent) > limit, "next_offset": offset+len(sessions),
             "summary": {"minutes": int(seconds // 60), "session_count": count, "unknown_count": unknown_count},
             "period": period, "period_start": since.isoformat(), "updated_at": current.isoformat()}
+
+
+def claim_daily_return(id: str, booking_no: str, now: datetime) -> bool:
+    """Persist retry throttling; only claim the original active reservation."""
+    with _connection() as conn:
+        return conn.execute("""UPDATE reservations SET daily_return_attempt_at=?
+            WHERE id=? AND kiosk_booking_no=? AND status='active'
+            AND (daily_return_attempt_at IS NULL OR daily_return_attempt_at<=?)""",
+            (now.timestamp(), id, booking_no, now.timestamp()-30)).rowcount == 1
+
+
+def confirm_daily_return(id: str, booking_no: str) -> None:
+    # Expiration may run while the school HTTP request is in flight.
+    with _connection() as conn:
+        conn.execute("""UPDATE reservations SET status='returned', returned_at=COALESCE(returned_at,?)
+            WHERE id=? AND kiosk_booking_no=? AND status IN ('active','ended')""",
+            (kst_now().isoformat(), id, booking_no))
