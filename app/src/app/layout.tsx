@@ -4,6 +4,8 @@ import Script from 'next/script'
 import './globals.css'
 import { AuthGate } from '@/components/AuthGate'
 import { CommunityProvider } from '@/components/CommunityProvider'
+import { ThemeController } from '@/components/ThemeSettings'
+import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 
@@ -41,11 +43,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${geist.variable} h-full`}>
+    <html lang="ko" className={`${geist.variable} h-full`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className="min-h-full font-sans antialiased">
+        <ThemeController />
         <AuthGate><CommunityProvider>{children}</CommunityProvider></AuthGate>
       </body>
       

@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { useUserProfile } from '@/hooks/useUserProfile'
-import { NotificationBanner } from '@/components/NotificationBanner'
-import { useCommunity } from '@/components/CommunityProvider'
-import { SUPPORT_URL, watchKey } from '@/lib/community'
+import { AppMenu } from '@/components/AppMenu'
+import { watchKey } from '@/lib/community'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
@@ -115,7 +114,6 @@ export default function HomePage() {
   const { user } = useAnonymousAuth()
   const { profile, isNew, suggestedNickname, rerollNickname, saveProfile } = useUserProfile(user)
   const { status, connState, byFloor, refresh, refreshing } = useRoomStatus()
-  const notifications = useCommunity()
   const openedNotification = useRef<string | null>(null)
 
   const [activeFloor, setActiveFloor]   = useState(1)
@@ -156,19 +154,6 @@ export default function HomePage() {
     const timer = setTimeout(() => { setActiveFloor(room.floor); setShowAvailableOnly(false) }, 0)
     return () => clearTimeout(timer)
   }, [status])
-
-  function roomCard(room: Room) {
-    const key = watchKey(room)
-    const watched = notifications.data?.watches.some(w => w.room_key === key) ?? false
-    return <div key={key} className="relative">
-      <RoomChip room={room} now={now} onReserve={openBooking} />
-      <button type="button" aria-label={`${roomNum(room.name)}호 ${watched ? '찜 해제' : '공실 알림 찜하기'}`} aria-pressed={watched}
-        disabled={notifications.busy || !notifications.data} onClick={() => void notifications.toggleWatch(room)}
-        className={`absolute -top-2 -right-1 h-8 w-8 rounded-full border shadow-sm text-lg leading-none flex items-center justify-center disabled:opacity-40 ${watched ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-500'}`}>
-        {watched ? '★' : '☆'}
-      </button>
-    </div>
-  }
 
   function openBooking(room: Room) {
     if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
@@ -216,6 +201,7 @@ export default function HomePage() {
           </div>
           {/* 새로고침 + 연결 배지 */}
           <div className="flex items-center gap-2 mt-1">
+            <AppMenu />
             <button
               onClick={refresh}
               disabled={refreshing}
@@ -277,16 +263,6 @@ export default function HomePage() {
             </div>
         )}
       </header>
-
-      {/* ── 알림 배너 ── */}
-      <NotificationBanner user={user} />
-      <nav aria-label="커뮤니티와 알림" className="grid grid-cols-3 gap-2 px-4 py-3">
-        <Link href="/lounge" className="rounded-xl bg-rb-600 py-3 text-center text-xs font-bold text-white">음대 라운지</Link>
-        <Link href="/alarm" className="rounded-xl bg-rb-50 py-3 text-center text-xs font-bold text-rb-700">찜·알림 설정</Link>
-        <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-[#FEE500] py-3 text-center text-xs font-bold text-[#191919]">운영자 문의 ↗</a>
-      </nav>
-      {notifications.notice && <p role="status" className="mx-4 mb-2 text-xs text-emerald-800">{notifications.notice} <Link href="/alarm" className="underline">알림 설정</Link></p>}
-      {notifications.error && <p role="alert" className="mx-4 mb-2 text-xs text-rose-800">찜·알림 연결을 확인해 주세요. <Link href="/alarm" className="underline">설정 확인</Link></p>}
 
       {/* ── 층 탭 ── */}
       {availableOnlyActive ? (
@@ -371,7 +347,7 @@ export default function HomePage() {
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {rooms.map(roomCard)}
+                {rooms.map(room => <RoomChip key={watchKey(room)} room={room} now={now} onReserve={openBooking} />)}
               </div>
             </section>
           )
@@ -388,7 +364,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {rooms.map(roomCard)}
+              {rooms.map(room => <RoomChip key={watchKey(room)} room={room} now={now} onReserve={openBooking} />)}
             </div>
           </section>
         ))}

@@ -6,6 +6,7 @@ import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { clearStudentId, getStudentId } from '@/lib/localBooking'
 import { useUserProfile } from '@/hooks/useUserProfile'
 import { OnboardingModal } from '@/components/OnboardingModal'
+import { AppMenu } from '@/components/AppMenu'
 import { DEPARTMENTS, Department } from '@/types/collections'
 import type { RankingsData } from '@/app/api/rankings/route'
 
@@ -251,6 +252,7 @@ export default function MyPage() {
             <h1 className="text-xl font-bold text-white">마이페이지</h1>
             <p className="text-rb-200 text-xs mt-0.5">프로필 · 연습 통계</p>
           </div>
+          <div className="ml-auto"><AppMenu /></div>
         </div>
 
         {profile ? (

@@ -1,13 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { useCommunity } from '@/components/CommunityProvider'
-import { SUPPORT_URL } from '@/lib/community'
+import { AppMenu } from '@/components/AppMenu'
 
 export default function AlarmPage() {
   const n = useCommunity()
   return <div className="min-h-dvh max-w-md mx-auto bg-white pb-[calc(env(safe-area-inset-bottom)+24px)]">
     <header className="bg-rb-600 px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-5 text-white">
-      <Link href="/" className="text-sm">← 연습실</Link><h1 className="text-2xl font-bold mt-3">알림 설정</h1>
+      <div className="flex items-center justify-between"><Link href="/" className="text-sm">← 연습실</Link><AppMenu /></div><h1 className="text-2xl font-bold mt-3">알림 설정</h1>
       <p className="mt-1 text-sm text-rb-100">찜한 방부터 내 예약까지, 필요한 알림만</p>
     </header>
     <main className="p-5 space-y-5">
@@ -43,13 +43,12 @@ export default function AlarmPage() {
         <p className="text-xs text-gray-500 leading-5 mt-2">예약 알림은 앱에서 예약하거나 불러온 예약에 자동으로 연결됩니다. 취소·태그 완료 후에는 해당 태그 알림을 보내지 않습니다.</p>
       </section>
       <section className="rounded-2xl border border-gray-200 p-4">
-        <h2 className="font-bold">찜한 방 <span className="text-rb-600">{n.data?.watches.length ?? 0}</span></h2>
-        <p className="text-xs text-gray-500 mt-2 leading-5">방 카드의 별을 누르면 찜할 수 있어요. 서버가 학교 현황에서 공실 전환을 확인한 직후 알려드립니다. 예약 선점이나 순번 보장은 아닙니다.</p>
+        <div className="flex items-center justify-between"><h2 className="font-bold">찜한 방 <span className="text-rb-600">{n.data?.watches.length ?? 0}</span></h2><Link href="/favorites" className="text-sm font-semibold text-rb-700 underline underline-offset-4">찜한 방 관리</Link></div>
+        <p className="text-xs text-gray-500 mt-2 leading-5">찜한 방 관리에서 알림 받을 방을 선택하세요. 서버가 학교 현황에서 공실 전환을 확인한 직후 알려드립니다. 예약 선점이나 순번 보장은 아닙니다.</p>
         <ul className="mt-3 divide-y divide-gray-100">{n.data?.watches.map(w => <li key={w.room_key} className="flex justify-between items-center gap-2 py-3 text-sm"><Link href={`/?room=${w.room_key}`} className="font-semibold">{w.name}</Link><button disabled={n.busy} onClick={() => void n.removeWatch(w.room_key)} className="p-2 text-gray-500">찜 해제</button></li>)}</ul>
         {n.data?.watches.length === 0 && <p className="text-sm text-gray-500 py-3">아직 찜한 방이 없습니다.</p>}
       </section>
       <section><h2 className="font-bold mb-3">최근 알림</h2><ul className="space-y-2">{n.data?.history.map(h => <li key={h.id} className="rounded-xl bg-gray-50 p-3"><Link href={h.url} className="block"><p className="font-semibold text-sm">{h.title}</p><p className="text-xs text-gray-600 mt-1">{h.body}</p><p className="text-[11px] text-gray-500 mt-2">{new Date(h.created*1000).toLocaleString('ko-KR', {timeZone:'Asia/Seoul'})} · {({sent:'푸시 서버 전달 완료',pending:'전송 대기·재시도 중',skipped:'상태 변경으로 발송 생략',no_device:'수신 기기 없음'} as Record<string,string>)[h.status] ?? h.status}</p></Link></li>)}</ul>{n.data?.history.length === 0 && <p className="text-sm text-gray-500">아직 알림 기록이 없습니다.</p>}</section>
-      <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="block rounded-2xl bg-[#FEE500] p-4 text-center text-sm font-bold text-[#191919]">개선 아이디어·문의 → 운영자 오픈채팅</a>
     </main>
   </div>
 }

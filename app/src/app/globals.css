@@ -36,3 +36,45 @@ body {
 input[type="time"]::-webkit-calendar-picker-indicator {
   opacity: 0.5;
 }
+
+/* Dark surfaces preserve the existing room status hues and layout. */
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; background: #090f1b; }
+html[data-theme="dark"] body { background: #090f1b; color: #e5eaf3; }
+
+html[data-theme="dark"] {
+  & .bg-white { background-color: #101827; }
+  & :is(.bg-gray-50, .bg-slate-50) { background-color: #151f30; }
+  & .bg-gray-100 { background-color: #202c40; }
+  & .bg-gray-200 { background-color: #334155; }
+  & .bg-gray-300 { background-color: #64748b; }
+  & :is(.text-gray-900, .text-gray-800) { color: #e5eaf3; }
+  & .text-gray-700 { color: #cbd5e1; }
+  & :is(.text-gray-600, .text-gray-500) { color: #a6b4c8; }
+  & .text-gray-400 { color: #94a3b8; }
+  & :is(.border-gray-100, .border-gray-200) { border-color: #334155; }
+  & .border-gray-300 { border-color: #52627a; }
+  & .divide-gray-100 > :not(:last-child) { border-color: #334155; }
+  & .hover\:bg-gray-50:hover { background-color: #202c40; }
+  & :is(.bg-rb-50, .bg-blue-50) { background-color: #142947; }
+  & .bg-rb-100 { background-color: #1c3557; }
+  & .bg-rb-600 { background-color: #214da7; }
+  & .bg-rb-700 { background-color: #1b408c; }
+  & .bg-rb-800 { background-color: #163570; }
+  & :is(.text-rb-500, .text-rb-600, .text-rb-700, .text-rb-800, .text-blue-700) { color: #a3c9ff; }
+  & :is(.border-rb-100, .border-rb-200, .border-blue-200) { border-color: #345780; }
+  & .border-rb-300 { border-color: #4873a5; }
+  & .bg-emerald-50 { background-color: #10342d; }
+  & :is(.text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #8ae8bd; }
+  & :is(.border-emerald-100, .border-emerald-200, .border-emerald-300) { border-color: #2b8066; }
+  & :is(.bg-amber-50, .bg-yellow-50) { background-color: #392d16; }
+  & .bg-amber-200 { background-color: #684a18; }
+  & :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950, .text-yellow-600, .text-yellow-700) { color: #f8d481; }
+  & :is(.border-amber-200, .border-amber-300) { border-color: #a67b2e; }
+  & :is(.bg-rose-50, .bg-red-50) { background-color: #3b202b; }
+  & .bg-rose-100 { background-color: #512335; }
+  & :is(.text-rose-700, .text-rose-800, .text-rose-900, .text-red-600, .text-red-700) { color: #ffb1c2; }
+  & .border-red-200 { border-color: #98485e; }
+  & .bg-purple-100 { background-color: #322449; }
+  & .text-purple-700 { color: #d6bbfa; }
+}

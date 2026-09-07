@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { COMMUNITY_API, SUPPORT_URL } from '@/lib/community'
+import { AppMenu } from '@/components/AppMenu'
 interface Message { id: number; author: string; text: string; created_at: number; mine: boolean }
 export default function LoungePage() {
   const { user } = useAnonymousAuth()
@@ -73,12 +74,24 @@ export default function LoungePage() {
   }
   return <div className="flex flex-col h-dvh max-w-md mx-auto bg-white">
     <header className="bg-rb-600 text-white px-5 pt-[calc(env(safe-area-inset-top)+16px)] pb-4 shrink-0">
-      <div className="flex justify-between items-center"><Link href="/" className="text-sm">← 연습실</Link><a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-bold rounded-full bg-white/15 px-3 py-2">운영자 문의 ↗</a></div>
+      <div className="flex justify-between items-center"><Link href="/" className="text-sm">← 연습실</Link><AppMenu /></div>
       <h1 className="text-2xl font-bold mt-3">음대 라운지</h1><p className="text-sm text-rb-100 mt-1">학우들과 나누는 전체 채팅방</p>
     </header>
     <div className="px-4 py-3 border-b border-gray-100 text-xs text-gray-600 shrink-0">
       <p><span className={connected ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>{connected ? '● 실시간 연결' : '○ 연결 중'}</span>{nickname && ` · 나의 라운지 닉네임: ${nickname}`}</p>
-      <p className="mt-1 leading-5">텍스트만 보낼 수 있어요. 대화는 최대 7일·최근 1,000개까지 보관하며 최근 100개를 보여드려요.</p>
+      <p className="mt-2 leading-5">서로 존중하며 이야기해요. 개인정보·비방·도배는 올리지 마세요.</p>
+      <details className="mt-2 rounded-xl bg-slate-50 p-3 max-h-[30dvh] overflow-y-auto">
+        <summary className="cursor-pointer font-semibold text-rb-700">라운지 이용 규칙</summary>
+        <ul className="list-disc pl-4 mt-2 space-y-2 leading-5">
+          <li>음대 학우들이 함께 보는 전체 채팅방이에요. 서로 존중하는 말로 대화해 주세요.</li>
+          <li>욕설·비방·혐오 표현, 특정인을 괴롭히는 글은 올리지 마세요.</li>
+          <li>본인과 타인의 학번·연락처·실명 등 개인정보를 공유하지 마세요.</li>
+          <li>같은 내용의 도배, 광고·홍보와 사칭은 삼가 주세요.</li>
+          <li>자동으로 정해진 라운지 닉네임을 사용해요. 메시지는 다른 라운지 이용자에게 공개돼요.</li>
+          <li>텍스트만 한 번에 500자까지 보낼 수 있어요. 대화는 최대 7일·최근 1,000개까지 보관하며 최근 100개를 보여드려요.</li>
+        </ul>
+        <p className="mt-3 leading-5">불편한 대화나 개선 의견은 <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-rb-700 underline underline-offset-2">운영자 문의 ↗</a>로 알려 주세요.</p>
+      </details>
     </div>
     {error && <div role="alert" className="px-4 py-2 bg-rose-50 text-sm text-rose-800 shrink-0">{error}<button onClick={() => setRetry(v=>v+1)} className="ml-2 underline">다시 연결</button></div>}
     <div ref={scroller} role="log" aria-label="음대 라운지 대화" aria-live="polite" className="flex-1 overflow-y-auto px-4 py-5 space-y-4 bg-slate-50" onScroll={() => { const el = scroller.current; if (el) follow.current = el.scrollHeight-el.scrollTop-el.clientHeight < 120 }}>
