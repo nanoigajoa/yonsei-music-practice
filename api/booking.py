@@ -186,6 +186,12 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 12:10으로 전송해야 한다. 마지막 슬롯 시작 시각(12:00)을 보내면
         # 키오스크가 110분 예약으로 확정한다.
         finish_total = start_total + limit_time
+        # 키오스크는 예약 시작·종료와 별도로 now_cell_time부터 종료까지를
+        # 최대시간으로 검사한다. 정확히 120:00이면 경계값을 초과로 처리하므로,
+        # 120분 예약만 검사용 기준을 시작 1분 뒤로 둔다. begin/finish는 전혀
+        # 바꾸지 않으므로 실제 예약은 정확히 120분이며 POST도 한 번뿐이다.
+        check_total = start_total + (1 if limit_time == 120 else 0)
+        check_hour, check_min = str((check_total // 60) % 24), f"{check_total % 60:02d}"
 
         native_values = _native_form_values(form.text)
         reserve_data = {
@@ -193,10 +199,8 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
             "admin_mode": "", "corner_no": corner, "pc_id": pc_id, "quick": "",
             "corner_name": CORNER_NAMES[corner_no], "pc_name_no": f"연습실({room_no})",
             "limit_time": str(limit_time),
-            # 목록→예약폼이 만든 현재 시각 기준값을 유지한다. 임의로 시작 시각
-            # 으로 덮어쓰면 120분 경계에서 키오스크의 실제 계산과 달라진다.
-            "now_cell_time": native_values.get("now_cell_time", now_cell),
-            "cell_min": native_values.get("cell_min", cell_min),
+            "now_cell_time": check_hour if limit_time == 120 else native_values.get("now_cell_time", now_cell),
+            "cell_min": check_min if limit_time == 120 else native_values.get("cell_min", cell_min),
             "begin_hour": b_hour, "begin_min": b_min,
             "finish_hour": str(finish_total // 60), "finish_min": f"{finish_total % 60:02d}",
         }
