@@ -124,7 +124,7 @@ class BookingIntegrityTest(unittest.IsolatedAsyncioTestCase):
         results = await asyncio.gather(*(self.reserve() for _ in range(50)))
         self.assertTrue(all(item["pending"] for item in results))
         self.assertEqual(self.posts, 1)
-        reservations.expire_pending(self.now + timedelta(days=2))
+        reservations.expire_pending(self.record().end_at - timedelta(seconds=1))
         self.assertEqual(self.record().status, "uncertain")
         with self.assertRaises(reservations.ReservationConflict):
             reservations.acquire(id="other-room", uid=self.user["uid"], student_id=self.student,
@@ -196,6 +196,18 @@ class BookingIntegrityTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(record.status, "uncertain")
         again = await main._recover_uncertain(record)
         self.assertEqual(again.status, "uncertain")
+        self.assertEqual(self.posts, 1)
+
+    async def test_uncertain_ends_only_after_planned_end_without_reposting(self):
+        self.mode = "post_timeout"
+        await main.reserve_room(self.request, self.user)
+        record = self.record()
+        reservations.expire_pending(record.end_at - timedelta(seconds=1))
+        self.assertEqual(self.record().status, "uncertain")
+        ended = reservations.expire_pending(record.end_at)
+        self.assertEqual([item.id for item in ended], [record.id])
+        self.assertEqual(self.record().status, "unconfirmed_ended")
+        self.assertFalse(main._result_for_existing_request(self.record(), self.user, self.request.student_id)["pending"])
         self.assertEqual(self.posts, 1)
 
     async def test_submitting_intent_survives_new_db_connection_and_expiry(self):

@@ -191,8 +191,8 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         ) as refresh:
             results = await asyncio.gather(*(cancel_once() for _ in range(50)))
 
-        self.assertEqual(results.count("success"), 1)
-        self.assertEqual(results.count("http_409"), 49)
+        self.assertEqual(results.count("success"), 50)
+        self.assertEqual(results.count("http_409"), 0)
         cancel.assert_awaited_once()
         refresh.assert_awaited_once_with(1)
 
@@ -221,6 +221,18 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reservations.get(record.id).status, "pending_tag")
         clear.assert_not_awaited()
         refresh.assert_not_awaited()
+
+    async def test_repeated_cancel_of_confirmed_cancelled_booking_is_success(self):
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(id="cancelled-one", uid="user", student_id="2022172528", student_key=key, corner_no=1, room_no="119")
+        reservations.set_status("cancelled-one", "cancelled")
+        token = issue_return_token("user", "2022172528", 1, "119", "cancelled-one")
+        action = main.BookingActionRequest(student_id="2022172528", corner_no=1, return_token=token)
+        with patch.object(main.booking, "cancel", AsyncMock()) as cancel, patch.object(main.collector, "clear_reserved", AsyncMock()):
+            result = await main.cancel_booking(action, user={"uid": "user"})
+        self.assertTrue(result["success"])
+        cancel.assert_not_awaited()
 
     async def test_cancel_wins_race_with_tag_sync_and_cannot_be_resurrected(self):
         start = datetime.now().replace(second=0, microsecond=0)

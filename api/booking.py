@@ -325,7 +325,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         result.raise_for_status()
         error = re.search(r"msg=([^\"&]+)", result.text)
         message = unquote(error.group(1)) if error else ""
-        if re.search(r"로그인 후|이미.*(?:예약|사용)|다른 이용자.*예약|예약.*불가|예약할 수 없|최대.*(?:120|2시간)|시간선택|시간 선택", message):
+        if re.search(r"로그인 후|이미.*(?:예약|사용)|다른 이용자.*예약|예약.*불가|예약할 수 없|최대.*(?:120|2시간)|시간선택|시간 선택|예약.*(?:실패|초과|제한|않|없)|(?:이용|사용).*제한", message):
             return {"success": False, "message": message}
         # 알 수 없는 msg도 거절로 추측하지 않고 일치하는 내역을 확인한다.
         evidence = await _read_submission(client, corner_no, room_no, start_at, limit_time)

@@ -332,7 +332,7 @@ def _result_for_existing_request(record: reservations.Reservation, user: dict, s
             "success": False, "pending": True, "request_id": record.request_id,
             "code": "confirmation_pending" if record.status == "uncertain" else "processing",
             "room_no": record.room_no, "corner_no": record.corner_no,
-            "message": "학교 예약 결과를 확인 중입니다. 새 예약을 보내지 않고 내역을 확인합니다.",
+            "message": f"예약을 확정하지 못했습니다. {record.end_at:%H:%M} 이후 다시 예약할 수 있습니다." if record.status == "uncertain" else "예약 요청을 처리하고 있습니다.",
         }
     if record.status in {"pending_tag", "active"}:
         return {
@@ -557,7 +557,7 @@ async def current_booking(data: CurrentBookingRequest, user: dict = Depends(curr
             "success": True, "found": True, "pending": True,
             "request_id": record.request_id, "code": "confirmation_pending", "duration_min": record.duration_min,
             "room_no": record.room_no, "corner_no": record.corner_no,
-            "message": "학교 예약 결과를 확인 중입니다. 새 예약은 잠시 기다려 주세요.",
+            "message": f"예약을 확정하지 못했습니다. {record.end_at:%H:%M} 이후 다시 예약할 수 있습니다." if record.status == "uncertain" else "예약 요청을 처리하고 있습니다.",
         }
     return {
         "success": True, "found": True, "pending": False, "request_id": record.request_id,
@@ -735,14 +735,19 @@ async def cancel_booking(data: BookingActionRequest, user: dict = Depends(curren
 
 async def _cancel_booking_locked(data: BookingActionRequest, user: dict, claims: dict):
     record = reservations.open_for_uid(user["uid"])
-    # 태그 마감 직후에는 expire_pending()이 이미 DB 상태를 expired로 바꾼다.
-    # 이 경우도 사용자 입장에서는 '취소 완료'이므로 로컬 화면을 정상적으로 닫는다.
-    if not record:
-        expired = reservations.get(str(claims.get("reservation", "")))
-        if expired and expired.uid == user["uid"] and expired.status == "expired":
-            await collector.clear_reserved(expired.corner_no, expired.room_no, reservation_id=expired.id)
-            await collector.refresh_corner_now(expired.corner_no)
-            return {"success": True, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
+    # 응답을 놓친 취소 재시도는 이미 완료된 원래 예약의 결과를 반환한다.
+    previous = reservations.get(str(claims.get("reservation", "")))
+    terminal_messages = {
+        "cancelled": "예약 취소 완료",
+        "expired": "태그 시간이 지나 예약이 자동 취소되었습니다.",
+        "ended": "이미 이용 시간이 종료된 예약입니다.",
+        "returned": "이미 반납한 예약입니다.",
+    }
+    if previous and previous.uid == user["uid"] and previous.status in terminal_messages:
+        await collector.clear_reserved(previous.corner_no, previous.room_no, reservation_id=previous.id)
+        if previous.status == "expired":
+            await collector.refresh_corner_now(previous.corner_no)
+        return {"success": True, "message": terminal_messages[previous.status]}
     if not record or record.id != claims.get("reservation") or record.status != "pending_tag":
         raise HTTPException(409, "취소할 인증대기 예약을 찾지 못했습니다.")
     try:

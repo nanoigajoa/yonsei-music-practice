@@ -119,7 +119,7 @@ def expire_pending(now: datetime | None = None) -> list[Reservation]:
     """이름은 호환성을 위해 유지한다. 모든 열린 고아 상태를 정리한다.
 
     - creating: 전송하지 않은 준비만 만료. 전송 여부 불명은 uncertain으로 보존
-    - submitting/uncertain: 학교 반영 가능성이 있어 시간만으로 선점을 풀지 않음
+    - submitting/uncertain: 전송 계획의 종료 시각까지 보존하고 이후 unconfirmed_ended로 종료
     - pending_tag: 예약 시작 + 10분까지 태그하지 않은 예약
     - active: 이용 종료 시각이 지나 키오스크가 강제 반납했을 수 있는 기록
 
@@ -134,8 +134,9 @@ def expire_pending(now: datetime | None = None) -> list[Reservation]:
             """SELECT * FROM reservations
                WHERE (status='creating' AND dispatch_started=0 AND created_at < ?)
                   OR (status='pending_tag' AND tag_deadline < ?)
-                  OR (status='active' AND end_at <= ?)""",
-            ((now - CREATING_TTL).isoformat(), (now - PENDING_TAG_GRACE).isoformat(), now.isoformat()),
+                  OR (status='active' AND end_at <= ?)
+                  OR (status IN ('submitting','uncertain') AND dispatch_started=1 AND duration_min IN (30,60,90,120) AND end_at <= ?)""",
+            ((now - CREATING_TTL).isoformat(), (now - PENDING_TAG_GRACE).isoformat(), now.isoformat(), now.isoformat()),
         ).fetchall()
         conn.execute(
             "UPDATE reservations SET status='failed' WHERE status='creating' AND dispatch_started=0 AND created_at < ?",
@@ -147,6 +148,9 @@ def expire_pending(now: datetime | None = None) -> list[Reservation]:
         )
         conn.execute("UPDATE reservations SET status='expired' WHERE status='pending_tag' AND tag_deadline < ?", ((now - PENDING_TAG_GRACE).isoformat(),))
         conn.execute("UPDATE reservations SET status='ended' WHERE status='active' AND end_at <= ?", (now.isoformat(),))
+        # 요청의 최대 이용 시간이 지난 뒤에는 해당 요청이 새 예약과 겹칠 수 없다.
+        # 학교 취소 성공으로 꾸미지 않고 별도 종료 상태로 기록한다.
+        conn.execute("UPDATE reservations SET status='unconfirmed_ended' WHERE status IN ('submitting','uncertain') AND dispatch_started=1 AND duration_min IN (30,60,90,120) AND end_at <= ?", (now.isoformat(),))
         conn.execute("COMMIT")
     return [item for row in rows if (item := _row(row))]
 
