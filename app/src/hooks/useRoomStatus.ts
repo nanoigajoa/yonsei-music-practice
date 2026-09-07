@@ -10,7 +10,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const API_URL = process.env.NEXT_PUBLIC_KIOSK_API_URL ?? 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_STATUS_API_URL
+  ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
+  ?? 'https://yonsei-practice-api.fly.dev'
 const RECONNECT_DELAY = 5_000
 const POLL_INTERVAL   = 60_000
 
@@ -25,6 +27,10 @@ export interface Room {
   floor:             number
   occupied:          boolean
   occupied_until:    string | null
+  handover?:         boolean
+  reservation_state?: 'pending_tag' | 'active' | null
+  reservation_start?: string | null
+  tag_deadline?:      string | null
   available_periods: Period[]
 }
 
@@ -65,48 +71,46 @@ export function useRoomStatus() {
     setRefreshing(false)
   }, [refreshing, fetchOnce])
 
-  // ── SSE 연결 ──────────────────────────────────────────
-  const connect = useCallback(() => {
-    if (typeof EventSource === 'undefined') {
-      // SSE 미지원 → 폴링
-      setConnState('polling')
-      fetchOnce()
-      timerRef.current = setInterval(fetchOnce, POLL_INTERVAL) as unknown as ReturnType<typeof setTimeout>
-      return
-    }
-
-    setConnState('connecting')
-    const es = new EventSource(`${API_URL}/stream`)
-    esRef.current = es
-
-    es.onopen = () => setConnState('live')
-
-    es.onmessage = (e) => {
-      try {
-        setStatus(JSON.parse(e.data) as RoomStatus)
-        setConnState('live')
-      } catch { /* noop */ }
-    }
-
-    es.onerror = () => {
-      es.close()
-      esRef.current = null
-      setConnState('error')
-      // SSE 실패 시 REST로 즉시 데이터 확보 후 재연결
-      fetchOnce()
-      timerRef.current = setTimeout(connect, RECONNECT_DELAY)
-    }
-  }, [fetchOnce])
-
   useEffect(() => {
-    // 마운트 즉시 REST fetch로 초기 데이터 확보 (SSE 연결 전)
-    fetchOnce()
-    connect()
+    let stopped = false
+    function connect() {
+      if (stopped) return
+      if (typeof EventSource === 'undefined') {
+        setConnState('polling')
+        void fetchOnce()
+        timerRef.current = setInterval(fetchOnce, POLL_INTERVAL) as unknown as ReturnType<typeof setTimeout>
+        return
+      }
+
+      setConnState('connecting')
+      const es = new EventSource(`${API_URL}/stream`)
+      esRef.current = es
+      es.onopen = () => setConnState('live')
+      es.onmessage = (e) => {
+        try {
+          setStatus(JSON.parse(e.data) as RoomStatus)
+          setConnState('live')
+        } catch { /* noop */ }
+      }
+      es.onerror = () => {
+        es.close()
+        esRef.current = null
+        setConnState('error')
+        void fetchOnce()
+        timerRef.current = setTimeout(connect, RECONNECT_DELAY)
+      }
+    }
+
+    timerRef.current = setTimeout(() => {
+      void fetchOnce()
+      connect()
+    }, 0)
     return () => {
+      stopped = true
       esRef.current?.close()
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [connect, fetchOnce])
+  }, [fetchOnce])
 
   // ── 층별 그룹 ─────────────────────────────────────────
   const byFloor = status?.rooms.reduce<Record<number, Record<number, Room[]>>>(
