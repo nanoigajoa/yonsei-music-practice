@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { getStudentId, YONSEI_STUDENT_ID_PATTERN, saveStudentId } from '@/lib/localBooking'
@@ -18,13 +18,25 @@ const LOGIN_MESSAGES = {
   error: '로그인에 실패했습니다. 다시 시도해 주세요.',
 } as const
 
+function bindingErrorMessage(cause: unknown): string {
+  const code = typeof cause === 'object' && cause !== null && 'code' in cause ? String(cause.code) : ''
+  if (cause instanceof TypeError || code === 'auth/network-request-failed') {
+    return '연동 서버에 연결하지 못했어요. Wi-Fi와 모바일 데이터를 바꿔 연결한 뒤 다시 시도해 주세요.'
+  }
+  if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
+    return '연동 서버 응답이 늦어지고 있어요. 잠시 후 다시 연결해 주세요.'
+  }
+  return cause instanceof Error ? cause.message : '학번 등록을 확인하지 못했습니다.'
+}
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading, authError, linkGoogle } = useAnonymousAuth()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
   const [studentId, setStudentId] = useState('')
   const [savedStudentId, setSavedStudentId] = useState(() => getStudentId())
-  const [binding, setBinding] = useState<'idle' | 'checking' | 'ready'>('idle')
+  const [binding, setBinding] = useState<'idle' | 'checking' | 'ready' | 'failed'>('idle')
+  const [bindingAttempt, setBindingAttempt] = useState(0)
   const [noticeAcknowledged, setNoticeAcknowledged] = useState(false)
   const authenticated = user && !user.isAnonymous
 
@@ -38,45 +50,50 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    if (authError && authError in LOGIN_MESSAGES) {
-      setError(LOGIN_MESSAGES[authError as keyof typeof LOGIN_MESSAGES])
-      setSigningIn(false)
-    }
+    const timer = setTimeout(() => {
+      if (authError && authError in LOGIN_MESSAGES) {
+        setError(LOGIN_MESSAGES[authError as keyof typeof LOGIN_MESSAGES])
+        setSigningIn(false)
+      }
+    }, 0)
+    return () => clearTimeout(timer)
   }, [authError])
 
-  async function bindStudent(id: string) {
+  const bindStudent = useCallback(async (id: string) => {
     const idToken = await user?.getIdToken(true)
     if (!idToken) throw new Error('Google 로그인이 필요합니다.')
     const response = await fetch(`${API_URL}/identity/bind`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
       body: JSON.stringify({ student_id: id, privacy_notice_version: '2026-09-06' }),
+      signal: AbortSignal.timeout(15000),
     })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data.detail ?? '학번 등록을 확인하지 못했습니다.')
-  }
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '학번 등록을 확인하지 못했습니다.')
+    if (data.success !== true) throw new Error('학번 등록을 확인하지 못했습니다. 다시 시도해 주세요.')
+  }, [user])
 
   // 이 기기에 저장되어 있던 학번도 서버의 Google 계정 연결과 대조한다.
   // 브라우저 저장소를 지웠다가 다른 학번을 넣어도 예약 API가 통과하지 않는다.
   useEffect(() => {
-    if (!authenticated || !savedStudentId) {
-      setBinding('idle')
-      return
-    }
     let cancelled = false
-    setBinding('checking')
-    void bindStudent(savedStudentId)
-      .then(() => { if (!cancelled) setBinding('ready') })
-      .catch((cause: unknown) => {
-        if (cancelled) return
+    const timer = setTimeout(() => {
+      if (!authenticated || !savedStudentId) {
         setBinding('idle')
-        setSavedStudentId('')
-        setError(cause instanceof Error ? cause.message : '학번 등록을 확인하지 못했습니다.')
-      })
-    return () => { cancelled = true }
-  // bindStudent uses the current Firebase user and deliberately reruns when its UID changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, savedStudentId, user?.uid])
+        return
+      }
+      setBinding('checking')
+      setError('')
+      void bindStudent(savedStudentId)
+        .then(() => { if (!cancelled) setBinding('ready') })
+        .catch((cause: unknown) => {
+          if (cancelled) return
+          setBinding('failed')
+          setError(bindingErrorMessage(cause))
+        })
+    }, 0)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [authenticated, savedStudentId, bindStudent, bindingAttempt])
 
   async function saveAndBindStudent() {
     if (!YONSEI_STUDENT_ID_PATTERN.test(studentId) || !noticeAcknowledged) return
@@ -88,7 +105,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setSavedStudentId(studentId)
       setBinding('ready')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '학번 등록을 확인하지 못했습니다.')
+      setError(bindingErrorMessage(cause))
     } finally {
       setSigningIn(false)
     }
@@ -111,6 +128,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <p className="mt-5 text-[11px] leading-5 text-white">Google 계정당 학번 하나만 등록할 수 있습니다.</p>
       </main>
     )
+  }
+  if (savedStudentId && binding === 'failed') {
+    return <main className="min-h-dvh max-w-md mx-auto bg-rb-600 px-6 flex flex-col items-center justify-center text-center text-white">
+      <h1 className="text-xl font-bold">학번 연결을 확인하지 못했어요</h1>
+      <p role="alert" className="mt-3 text-sm leading-6">{error}</p>
+      <p className="mt-3 text-xs leading-5">저장된 학번은 유지되어 있어요. 학번을 다시 입력할 필요는 없어요.</p>
+      <button onClick={() => setBindingAttempt(value => value + 1)} className="mt-6 h-14 w-full rounded-2xl bg-white font-bold text-rb-700">다시 연결하기</button>
+      <button onClick={() => { setStudentId(savedStudentId); setSavedStudentId(''); setBinding('idle'); setError('') }} className="mt-4 text-xs underline underline-offset-4">입력한 학번 수정</button>
+    </main>
   }
   if (savedStudentId && binding !== 'ready') {
     return <div className="min-h-dvh flex items-center justify-center bg-rb-600 text-white text-sm">등록된 학번 확인 중...</div>
