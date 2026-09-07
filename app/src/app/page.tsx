@@ -201,7 +201,6 @@ export default function HomePage() {
           </div>
           {/* 새로고침 + 연결 배지 */}
           <div className="flex items-center gap-2 mt-1">
-            <AppMenu />
             <button
               onClick={refresh}
               disabled={refreshing}
@@ -216,6 +215,7 @@ export default function HomePage() {
             <span className={`text-xs font-semibold ${CONN_COLOR[connState]}`}>
               {CONN_BADGE[connState]}
             </span>
+            <AppMenu />
           </div>
         </div>
         <div className="flex items-center justify-between mt-0.5">
@@ -421,10 +421,10 @@ export default function HomePage() {
             }) : '--:--:--'}
           </time>
         </div>
-        <Link href="/facility-report"
-          className="flex items-center justify-between w-full h-11 rounded-2xl bg-gray-50 border-2 border-gray-200 px-4 text-gray-500 text-sm font-bold active:scale-[0.98] transition-transform">
-          <span>🔒 시설 신문고</span>
-          <span className="text-gray-400 text-xs">준비 중</span>
+        <Link href="/lounge"
+          className="flex items-center justify-between w-full h-11 rounded-2xl bg-rb-50 border-2 border-rb-200 px-4 text-rb-700 text-sm font-bold active:scale-[0.98] transition-transform">
+          <span>음대 라운지</span>
+          <span className="text-xs">익명 채팅 ›</span>
         </Link>
         <p className="text-center text-[11px] text-gray-600 pt-1">
           <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-400 transition-colors">
