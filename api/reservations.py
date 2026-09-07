@@ -77,6 +77,10 @@ def _connection():
     if "dispatch_started" not in columns:
         # NULL은 배포 전 코드가 남긴 전송 여부 불명 기록이다.
         conn.execute("ALTER TABLE reservations ADD COLUMN dispatch_started INTEGER")
+    if "returned_at" not in columns:
+        # Preserve legacy rows: an unknown historical return time stays NULL.
+        conn.execute("ALTER TABLE reservations ADD COLUMN returned_at TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS reservations_uid_created ON reservations(uid, created_at DESC, id DESC)")
     open_filter = "status IN ('creating','submitting','uncertain','pending_tag','active')"
     for name, fields in (("uid", "uid"), ("student", "student_key"), ("room", "corner_no, room_no")):
         conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS reservations_open_{name} ON reservations({fields}) WHERE {open_filter}")
@@ -325,7 +329,9 @@ def fail(id: str) -> None:
 
 def set_status(id: str, status: str) -> Reservation | None:
     with _connection() as conn:
-        conn.execute("UPDATE reservations SET status=? WHERE id=?", (status, id))
+        conn.execute("""UPDATE reservations SET status=?,
+                     returned_at=CASE WHEN ?='returned' AND status='active' THEN COALESCE(returned_at,?) ELSE returned_at END
+                     WHERE id=?""", (status, status, kst_now().isoformat(), id))
         row = conn.execute("SELECT * FROM reservations WHERE id=?", (id,)).fetchone()
     return _row(row)
 
@@ -370,3 +376,67 @@ def reject_submission(id: str) -> None:
     """학교가 명시적으로 거절한 요청만 종료한다. 복원 완료 상태는 덮지 않는다."""
     with _connection() as conn:
         conn.execute("UPDATE reservations SET status='failed' WHERE id=? AND status IN ('creating','submitting')", (id,))
+
+
+def practice_history(uid: str, *, period: str = "weekly", limit: int = 30, offset: int = 0,
+                     now: datetime | None = None) -> dict:
+    """Private read-only projection of durable bookings; no second session copy or school request."""
+    current = kst_normalize(now) if now else kst_now()
+    day = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "daily":
+        since = day
+    elif period == "weekly":
+        since = day - timedelta(days=day.weekday())
+    elif period == "monthly":
+        since = day.replace(day=1)
+    else:
+        raise ValueError("invalid period")
+    with _connection() as conn:
+        conn.execute("BEGIN")
+        recent = conn.execute("SELECT * FROM reservations WHERE uid=? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?",
+                              (uid, limit + 1, offset)).fetchall()
+        # One-day margin also includes historical timestamps stored with a UTC offset.
+        stats = conn.execute("""SELECT * FROM reservations WHERE uid=? AND status IN ('active','returned','ended')
+                                AND substr(end_at,1,10)>=?""", (uid, (since-timedelta(days=1)).date().isoformat())).fetchall()
+        conn.execute("COMMIT")
+
+    def interval(row):
+        if row["status"] not in {"active", "returned", "ended"}:
+            return None
+        if row["status"] == "returned" and not row["returned_at"]:
+            return None
+        end = min(parse_kst(row["end_at"]), current)
+        if row["returned_at"]:
+            end = min(end, parse_kst(row["returned_at"]))
+        return parse_kst(row["start_at"]), end
+
+    sessions = []
+    for row in recent[:limit]:
+        usage = interval(row)
+        display_status = row["status"]
+        if display_status == "active" and parse_kst(row["end_at"]) <= current:
+            display_status = "ended"
+        sessions.append({
+            "id": row["id"], "room_no": row["room_no"], "corner_no": row["corner_no"],
+            "created_at": parse_kst(row["created_at"]).isoformat(),
+            "start_at": parse_kst(row["start_at"]).isoformat(), "end_at": parse_kst(row["end_at"]).isoformat(),
+            "returned_at": parse_kst(row["returned_at"]).isoformat() if row["returned_at"] else None,
+            "status": display_status, "duration_min": row["duration_min"],
+            "usage_minutes": max(0, int((usage[1]-usage[0]).total_seconds() // 60)) if usage else None,
+        })
+    seconds = 0
+    count = 0
+    unknown_count = 0
+    for row in stats:
+        usage = interval(row)
+        if usage is None:
+            if parse_kst(row["start_at"]) < current and parse_kst(row["end_at"]) > since:
+                unknown_count += 1
+            continue
+        start, end = max(usage[0], since), usage[1]
+        if end > start:
+            seconds += (end-start).total_seconds()
+            count += 1
+    return {"sessions": sessions, "has_more": len(recent) > limit, "next_offset": offset+len(sessions),
+            "summary": {"minutes": int(seconds // 60), "session_count": count, "unknown_count": unknown_count},
+            "period": period, "period_start": since.isoformat(), "updated_at": current.isoformat()}

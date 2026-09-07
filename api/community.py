@@ -11,8 +11,9 @@ import re
 import secrets
 import sqlite3
 import time
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from firebase_admin import messaging
 
@@ -98,6 +99,14 @@ def save_message(uid: str, data: ChatMessage):
         row = dict(conn.execute("SELECT * FROM messages WHERE id=?", (cursor.lastrowid,)).fetchone())
         conn.execute("DELETE FROM messages WHERE created<? OR id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 1000)", (now-7*86400,))
     return row, True
+
+
+@router.get("/practice")
+def practice(response: Response, period: Literal["daily", "weekly", "monthly"] = "weekly",
+             limit: int = Query(30, ge=1, le=100), offset: int = Query(0, ge=0, le=100000),
+             user: dict = Depends(member)):
+    response.headers["Cache-Control"] = "private, no-store"
+    return reservations.practice_history(user["uid"], period=period, limit=limit, offset=offset)
 
 
 @router.get("/lounge")
