@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { Room } from '@/hooks/useRoomStatus'
 import { auth } from '@/lib/firebase'
-import { canStartBooking } from '@/lib/bookingHours'
 import { bookingApiErrorMessage } from '@/lib/bookingApiError'
 import { bookingFailureReason, trackBookingEvent } from '@/lib/bookingAnalytics'
 import {
@@ -88,11 +87,6 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
     action: Exclude<BookingAction, null>,
     timeoutMs = REQUEST_TIMEOUT_MS,
   ) {
-    if (!canStartBooking()) {
-      setError(true)
-      setMessage('학교 연동은 오전 7시부터 가능합니다.')
-      return null
-    }
     setLoadingAction(action)
     setMessage('')
     const controller = new AbortController()
@@ -101,7 +95,6 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
       // 예약 직전에 토큰을 강제 갱신해 만료된 캐시 토큰을 보내지 않도록 한다.
       const idToken = await auth.currentUser?.getIdToken(true)
       if (!idToken) throw new Error('로그인이 필요합니다.')
-      if (!canStartBooking()) throw new Error('학교 연동은 오전 7시부터 가능합니다.')
       const res = await fetch(`${API_URL}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
@@ -124,11 +117,6 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   }
 
   async function reserve() {
-    if (!canStartBooking()) {
-      setError(true)
-      setMessage('예약은 오전 7시부터 가능합니다.')
-      return
-    }
     if (!YONSEI_STUDENT_ID_PATTERN.test(studentId)) {
       setError(true); setMessage('연세대학교 10자리 학번을 다시 등록해 주세요.'); return
     }
