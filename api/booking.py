@@ -57,9 +57,10 @@ def _next_ten_minute(hour: str, minute: str) -> tuple[str, str]:
 def _native_form_values(html: str) -> dict[str, str]:
     """키오스크 예약 폼이 기본으로 넣은 전송값을 보존한다.
 
-    예약 페이지에는 화면에 보이지 않는 시간·세션 보조 필드가 포함될 수 있다.
-    이를 빈 값으로 다시 만들면 키오스크 화면과 다른 경계 계산이 발생할 수
-    있으므로, 실제 브라우저 폼과 같은 기본값을 먼저 수집한다.
+    예약 페이지에는 화면에 보이지 않는 세션 보조 필드가 포함될 수 있다.
+    이를 누락하면 키오스크 화면과 다른 요청이 될 수 있으므로, 실제 브라우저
+    폼과 같은 기본값을 먼저 수집한다. 시간 제어값은 reserve()에서 명시적으로
+    같은 10분 칸 기준으로 덮어쓴다.
     """
     soup = BeautifulSoup(html, "html.parser")
     values: dict[str, str] = {}
@@ -182,25 +183,24 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
         # 그대로 보존해, 화면에서 직접 누른 예약과 같은 요청을 만든다.
         b_hour, b_min = _next_ten_minute(now_cell, cell_min)
         start_total = int(b_hour) * 60 + int(b_min)
-        # finish_*는 예약의 실제 종료 시각이다. 예를 들어 10:10부터 120분은
-        # 12:10으로 전송해야 한다. 마지막 슬롯 시작 시각(12:00)을 보내면
-        # 키오스크가 110분 예약으로 확정한다.
-        finish_total = start_total + limit_time
-        # 키오스크는 예약 시작·종료와 별도로 now_cell_time부터 종료까지를
-        # 최대시간으로 검사한다. 정확히 120:00이면 경계값을 초과로 처리하므로,
-        # 120분 예약만 검사용 기준을 시작 1분 뒤로 둔다. begin/finish는 전혀
-        # 바꾸지 않으므로 실제 예약은 정확히 120분이며 POST도 한 번뿐이다.
-        check_total = start_total + (1 if limit_time == 120 else 0)
-        check_hour, check_min = str((check_total // 60) % 24), f"{check_total % 60:02d}"
+        # 학교 키오스크의 finish_*는 실제 종료 시각이 아니라 마지막 10분 칸의
+        # *시작* 시각이다. 즉 10:10부터 120분은 10:10~12:00의 12개 칸을
+        # 선택하고, 12:00~12:10 마지막 칸까지 포함해 12:10에 끝난다.
+        # finish를 12:10으로 보내면 13번째 칸까지 선택한 130분으로 계산되어
+        # "최대 120분" 오류가 난다.
+        finish_total = start_total + limit_time - 10
 
         native_values = _native_form_values(form.text)
         reserve_data = {
             **native_values,
             "admin_mode": "", "corner_no": corner, "pc_id": pc_id, "quick": "",
             "corner_name": CORNER_NAMES[corner_no], "pc_name_no": f"연습실({room_no})",
-            "limit_time": str(limit_time),
-            "now_cell_time": check_hour if limit_time == 120 else native_values.get("now_cell_time", now_cell),
-            "cell_min": check_min if limit_time == 120 else native_values.get("cell_min", cell_min),
+            # 이 세 값은 동일한 첫 10분 칸을 가리켜야 한다. 목록의 실제 분
+            # (예: 10:04)을 그대로 쓰면 학교가 126분으로 계산할 수 있다.
+            "limit_time": str(limit_time), "now_cell_time": b_hour, "cell_min": b_min,
+            # 구형 키오스크 폼의 stime/etime은 브라우저에서 빈 값으로 전송된다.
+            # 서버가 만든 잔여 문자열을 보존하면 시간 계산이 달라질 수 있다.
+            "stime": "", "etime": "",
             "begin_hour": b_hour, "begin_min": b_min,
             "finish_hour": str(finish_total // 60), "finish_min": f"{finish_total % 60:02d}",
         }
