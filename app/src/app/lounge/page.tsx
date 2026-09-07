@@ -4,10 +4,9 @@ import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
 import { COMMUNITY_API, SUPPORT_URL } from '@/lib/community'
 import { AppMenu } from '@/components/AppMenu'
-interface Message { id: number; text: string; created_at: number; mine: boolean }
+import { useLoungeHistory } from '@/hooks/useLoungeHistory'
 export default function LoungePage() {
   const { user } = useAnonymousAuth()
-  const [messages, setMessages] = useState<Message[]>([])
   const [draft, setDraft] = useState('')
   const [connected, setConnected] = useState(false)
   const [sending, setSending] = useState(false)
@@ -15,9 +14,11 @@ export default function LoungePage() {
   const [retry, setRetry] = useState(0)
   const socket = useRef<WebSocket | null>(null)
   const pending = useRef<{ client_id: string; text: string } | null>(null)
-  const bottom = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
+  const history = useLoungeHistory(scroller, follow)
+  const historyActions = useRef(history)
+  useEffect(() => { historyActions.current = history }, [history])
   useEffect(() => {
     if (!user) return
     let stopped = false
@@ -38,12 +39,12 @@ export default function LoungePage() {
           try { data = JSON.parse(event.data) } catch { return }
           if (data.type === 'history') {
             attempts = 0
-            setMessages(data.messages)
+            historyActions.current.receiveHistory(data)
             setConnected(true)
             setError('')
             if (pending.current) ws.send(JSON.stringify(pending.current))
           } else if (data.type === 'message') {
-            setMessages(old => old.some(m => m.id === data.message.id) ? old : [...old, data.message].sort((a,b) => a.id-b.id).slice(-100))
+            historyActions.current.receiveMessage(data.message)
           } else if (data.type === 'ack' && data.client_id === pending.current?.client_id) {
             pending.current = null; setSending(false); setDraft(''); setError('')
           } else if (data.type === 'error') {
@@ -62,9 +63,10 @@ export default function LoungePage() {
     void connect()
     return () => { stopped = true; clearTimeout(timer); socket.current?.close() }
   }, [user, retry])
-  useEffect(() => { if (follow.current) bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [messages])
-  function send() {
-    if (!draft.trim() || sending || !connected || socket.current?.readyState !== WebSocket.OPEN) return
+  async function send() {
+    if (!draft.trim() || sending || history.loading || !connected || socket.current?.readyState !== WebSocket.OPEN) return
+    if (history.hasNewer && !await history.latest()) return
+    if (socket.current?.readyState !== WebSocket.OPEN) return
     const message = { client_id: crypto.randomUUID(), text: draft.trim() }
     pending.current = message
     setSending(true); setError(''); follow.current = true
@@ -87,22 +89,27 @@ export default function LoungePage() {
           <li>같은 내용의 도배, 광고·홍보와 사칭은 삼가 주세요.</li>
           <li>모든 작성자는 ‘익명’으로 표시돼요. 내 메시지는 나에게만 ‘익명 (나)’로 보여요. 메시지 내용은 라운지 이용자 모두에게 공개돼요.</li>
           <li>서비스 이용에는 로그인이 필요하며, 운영을 위해 메시지와 계정 연결 정보는 서버에 보관돼요.</li>
-          <li>텍스트만 한 번에 500자까지 보낼 수 있어요. 대화는 최대 7일·최근 1,000개까지 보관하며 최근 100개를 보여드려요.</li>
+          <li>텍스트만 한 번에 500자까지 보낼 수 있어요. 대화는 최대 7일·최근 1,000개까지 보관해요. 처음에는 최근 100개를 보여주고, 위로 올리면 이전 대화를 50개씩 불러와요.</li>
         </ul>
         <p className="mt-3 leading-5">불편한 대화나 개선 의견은 <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-rb-700 underline underline-offset-2">운영자 문의 ↗</a>로 알려 주세요.</p>
       </details>
     </div>
     {error && <div role="alert" className="px-4 py-2 bg-rose-50 text-sm text-rose-800 shrink-0">{error}<button onClick={() => setRetry(v=>v+1)} className="ml-2 underline">다시 연결</button></div>}
-    <div ref={scroller} role="log" aria-label="음대 라운지 대화" aria-live="polite" className="flex-1 overflow-y-auto px-4 py-5 space-y-4 bg-slate-50" onScroll={() => { const el = scroller.current; if (el) follow.current = el.scrollHeight-el.scrollTop-el.clientHeight < 120 }}>
-      {connected && messages.length === 0 && <p className="text-sm text-gray-500 text-center py-10">첫 인사를 남겨 보세요. 🎵</p>}
-      {messages.map(m => <article key={m.id} className={`flex flex-col ${m.mine ? 'items-end' : 'items-start'}`}>
+    <div ref={scroller} role="log" aria-label="음대 라운지 대화" aria-live="polite" className="flex-1 min-h-0 overflow-y-auto px-4 py-5 space-y-4 bg-slate-50 [overflow-anchor:none]" onScroll={() => { const el = scroller.current; if (el) { follow.current = !history.hasNewer && el.scrollHeight-el.scrollTop-el.clientHeight < 120; if (el.scrollTop < 64 && !history.error) void history.older() } }}>
+      {history.messages.length > 0 && <div className="text-center text-xs text-gray-500">
+        {history.hasOlder ? <button disabled={history.loading} onClick={() => void history.older()} className="rounded-full border border-gray-200 bg-white px-4 py-2 text-rb-700 disabled:opacity-50">{history.loading ? '대화를 불러오는 중…' : '이전 대화 50개 보기'}</button> : <p>보관 중인 대화의 시작이에요.</p>}
+      </div>}
+      {connected && history.messages.length === 0 && <p className="text-sm text-gray-500 text-center py-10">첫 인사를 남겨 보세요. 🎵</p>}
+      {history.messages.map(m => <article key={m.id} data-message-id={m.id} className={`flex flex-col ${m.mine ? 'items-end' : 'items-start'}`}>
         <p className="text-[11px] text-gray-500 mb-1">{m.mine ? '익명 (나)' : '익명'}</p>
         <p className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${m.mine ? 'bg-rb-600 text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>{m.text}</p>
         <time className="mt-1 text-[10px] text-gray-500" dateTime={new Date(m.created_at*1000).toISOString()}>{new Date(m.created_at*1000).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false})}</time>
-      </article>)}<div ref={bottom} />
+      </article>)}
     </div>
+    {history.error && <p role="alert" className="px-4 py-2 text-xs bg-rose-50 text-rose-800 shrink-0">{history.error}</p>}
+    {history.hasNewer && <button disabled={history.loading} onClick={() => void history.latest()} className="shrink-0 border-t border-rb-200 bg-rb-50 px-4 py-3 text-sm font-bold text-rb-700 disabled:opacity-50">최신 대화 보기 ↓</button>}
     <form onSubmit={e=>{e.preventDefault();send()}} className="border-t border-gray-200 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shrink-0">
-      <div className="flex items-end gap-2"><textarea aria-label="메시지" placeholder="학우들에게 메시지를 남겨 보세요" value={draft} maxLength={500} disabled={sending} onChange={e=>setDraft(e.target.value)} rows={2} className="min-w-0 flex-1 resize-none rounded-xl border border-gray-300 p-3 text-sm focus:outline-rb-500" /><button type="submit" disabled={!connected || sending || !draft.trim()} className="h-12 rounded-xl bg-rb-600 text-white px-4 text-sm font-bold disabled:opacity-40">{sending ? '전송 중' : '보내기'}</button></div>
+      <div className="flex items-end gap-2"><textarea aria-label="메시지" placeholder="학우들에게 메시지를 남겨 보세요" value={draft} maxLength={500} disabled={sending} onChange={e=>setDraft(e.target.value)} rows={2} className="min-w-0 flex-1 resize-none rounded-xl border border-gray-300 p-3 text-sm focus:outline-rb-500" /><button type="submit" disabled={!connected || sending || history.loading || !draft.trim()} className="h-12 rounded-xl bg-rb-600 text-white px-4 text-sm font-bold disabled:opacity-40">{sending ? '전송 중' : '보내기'}</button></div>
       <p className="mt-1.5 text-[11px] text-gray-500 text-right">{draft.length}/500 · 학번·연락처 등 개인정보는 올리지 마세요</p>
     </form>
   </div>
