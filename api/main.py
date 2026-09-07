@@ -20,8 +20,6 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 import httpx
-from clock import school_access_allowed
-from starlette.responses import JSONResponse
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -118,8 +116,6 @@ async def _reservation_action_gate(reservation_id: str):
 
 async def _mark_tagged_active(record: reservations.Reservation) -> bool:
     """키오스크가 태그 완료를 보이면 pending_tag를 active로 단 한 번 전이한다."""
-    if not school_access_allowed():
-        return False
     async with _reservation_action_gate(record.id):
         current = reservations.get(record.id)
         if not current or current.status != "pending_tag":
@@ -185,8 +181,6 @@ async def reservation_recovery_loop() -> None:
 
 async def _recover_uncertain(record: reservations.Reservation) -> reservations.Reservation:
     """조회만 재시도한다. 일치하는 학교 증거가 없으면 선점을 그대로 유지한다."""
-    if not school_access_allowed():
-        return record
     if record.status != "uncertain" or record.id in _inflight_reservations:
         return record
     async with _reservation_action_gate(record.id):
@@ -288,16 +282,6 @@ app = FastAPI(
 )
 app.state.poll_interval = max(10, int(os.getenv("POLL_INTERVAL_SECONDS", "20")))
 
-
-@app.middleware("http")
-async def school_hours_guard(request: Request, call_next):
-    protected = request.url.path == "/identity/bind" or (
-        request.url.path.startswith("/booking/")
-        and request.url.path not in {"/booking/current", "/booking/reserve-result"}
-    )
-    if request.method != "OPTIONS" and protected and not school_access_allowed():
-        return JSONResponse({"detail": "학교 연동은 오전 7시부터 가능합니다.", "code": "school_closed"}, status_code=423)
-    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,
@@ -425,7 +409,7 @@ async def health():
         "data_ready": state is not None,
         "updated_at": state.updated_at if state else None,
         "booking_enabled": BOOKING_ENABLED,
-        "school_access_allowed": school_access_allowed(),
+        "school_access_allowed": True,
         "auto_return_enabled": AUTO_RETURN_ENABLED,
     }
 

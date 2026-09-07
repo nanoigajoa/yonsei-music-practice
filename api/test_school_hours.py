@@ -1,66 +1,107 @@
 import asyncio
 from datetime import datetime
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import httpx
+import os
+
+os.environ.setdefault("BOOKING_TOKEN_SECRET", "test-secret-that-is-at-least-32-characters-long")
 from fastapi.testclient import TestClient
 import clock
 import main
+from auth_security import student_key
 
 
-class SchoolTransportTest(unittest.IsolatedAsyncioTestCase):
-    async def test_all_http_methods_are_blocked_without_transport_call_at_night(self):
-        inner = httpx.MockTransport(lambda request: self.fail("Night request reached transport"))
-        async with httpx.AsyncClient(transport=clock.SchoolTransport(inner)) as client:
-            for hour, minute in [(0, 0), (6, 59), (22, 0), (23, 59)]:
-                with patch.object(clock, "now", return_value=datetime(2026, 9, 7, hour, minute, tzinfo=clock.KST)):
-                    for method in ("GET", "POST", "DELETE", "PUT"):
-                        with self.assertRaises(clock.SchoolClosed):
-                            await client.request(method, "http://school.test/booking/return.php")
+class NightIdentityTest(unittest.TestCase):
+    def setUp(self):
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        self.db_patch = patch.object(main.reservations, "DB_PATH", Path(tempdir.name) / "identity.sqlite3")
+        self.db_patch.start()
+        self.addCleanup(self.db_patch.stop)
+        self.clock_patch = patch.object(clock, "now", return_value=datetime(2026, 9, 7, 22, 0, tzinfo=clock.KST))
+        self.clock_patch.start()
+        self.addCleanup(self.clock_patch.stop)
+        self.overrides = patch.dict(main.app.dependency_overrides, {
+            main.current_user: lambda: {"uid": "existing-user", "firebase": {"sign_in_provider": "google.com"}},
+        })
+        self.overrides.start()
+        self.addCleanup(self.overrides.stop)
+        self.validator = AsyncMock(return_value=True)
+        validator_patch = patch.object(main.booking, "validate_student", self.validator)
+        validator_patch.start()
+        self.addCleanup(validator_patch.stop)
+        self.client = TestClient(main.app)
+        self.addCleanup(self.client.close)
+        self.student_id = "2026000001"
 
-    async def test_same_client_rechecks_time_for_next_request(self):
-        sent = []
-        def respond(request):
-            sent.append(request.url.path)
-            return httpx.Response(200, text="OK")
-        async with httpx.AsyncClient(transport=clock.SchoolTransport(httpx.MockTransport(respond))) as client:
-            with patch.object(clock, "now", return_value=datetime(2026, 9, 7, 21, 59, 59, tzinfo=clock.KST)):
-                await client.get("http://school.test/login")
-            with patch.object(clock, "now", return_value=datetime(2026, 9, 7, 22, 0, tzinfo=clock.KST)):
-                with self.assertRaises(clock.SchoolClosed):
-                    await client.post("http://school.test/reserve")
-        self.assertEqual(sent, ["/login"])
+    def bind(self, student_id=None):
+        return self.client.post("/identity/bind", json={
+            "student_id": student_id or self.student_id,
+            "privacy_notice_version": main.PRIVACY_NOTICE_VERSION,
+        })
 
-    async def test_request_crossing_close_is_cancelled(self):
-        cancelled = asyncio.Event()
-        async def stalled(request):
-            try:
-                await asyncio.sleep(10)
-            finally:
-                cancelled.set()
-        transport = clock.SchoolTransport(httpx.MockTransport(stalled))
-        with patch.object(clock, "now", return_value=datetime(2026, 9, 7, 21, 59, 59, 999000, tzinfo=clock.KST)):
-            async with httpx.AsyncClient(transport=transport) as client:
-                with self.assertRaises(clock.SchoolClosed):
-                    await client.get("http://school.test/status")
-        self.assertTrue(cancelled.is_set())
+    def test_existing_user_can_restore_registration_at_night_without_school(self):
+        key = student_key(self.student_id)
+        main.reservations.bind_student("existing-user", key)
+        for hour, minute in [(22, 0), (0, 0), (6, 59)]:
+            with self.subTest(hour=hour), patch.object(clock, "now", return_value=datetime(2026, 9, 7, hour, minute, tzinfo=clock.KST)):
+                response = self.bind()
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["success"])
+                self.assertFalse(response.json()["created"])
+        self.assertEqual(main.reservations.binding_for_uid("existing-user"), key)
+        self.validator.assert_not_awaited()
 
-    async def test_opening_time_permits_request(self):
-        with patch.object(clock, "now", return_value=datetime(2026, 9, 7, 7, 0, tzinfo=clock.KST)):
-            async with httpx.AsyncClient(transport=clock.SchoolTransport(httpx.MockTransport(lambda r: httpx.Response(200)))) as client:
-                self.assertEqual((await client.get("http://school.test/status")).status_code, 200)
+    def test_new_registration_validates_student_at_night(self):
+        response = self.bind()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["created"])
+        self.assertEqual(main.reservations.binding_for_uid("existing-user"), student_key(self.student_id))
+        self.validator.assert_awaited_once_with(self.student_id)
+
+    def test_existing_user_cannot_change_student_at_night(self):
+        key = student_key(self.student_id)
+        main.reservations.bind_student("existing-user", key)
+        self.assertEqual(self.bind("2026000002").status_code, 409)
+        self.assertEqual(main.reservations.binding_for_uid("existing-user"), key)
+        self.validator.assert_not_awaited()
+
+    def test_other_account_cannot_claim_existing_student_at_night(self):
+        key = student_key(self.student_id)
+        main.reservations.bind_student("other-user", key)
+        self.assertEqual(self.bind().status_code, 409)
+        self.assertIsNone(main.reservations.binding_for_uid("existing-user"))
+        self.assertEqual(main.reservations.binding_for_uid("other-user"), key)
+        self.validator.assert_not_awaited()
+
+    def test_non_google_account_cannot_confirm_registration_at_night(self):
+        main.reservations.bind_student("existing-user", student_key(self.student_id))
+        main.app.dependency_overrides[main.current_user] = lambda: {"uid": "existing-user"}
+        self.assertEqual(self.bind().status_code, 403)
+        self.validator.assert_not_awaited()
+
+    def test_school_rejection_does_not_register_student_at_night(self):
+        self.validator.return_value = False
+        self.assertEqual(self.bind().status_code, 422)
+        self.assertIsNone(main.reservations.binding_for_uid("existing-user"))
+        self.validator.assert_awaited_once_with(self.student_id)
+
+    def test_health_reports_school_access_at_all_hours(self):
+        for hour in (0, 6, 7, 21, 22, 23):
+            with self.subTest(hour=hour), patch.object(clock, "now", return_value=datetime(2026, 9, 7, hour, tzinfo=clock.KST)):
+                response = self.client.get("/health")
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.json()["school_access_allowed"])
 
 
-class SchoolRouteTest(unittest.TestCase):
-    def test_night_routes_reject_before_database_or_school(self):
-        with patch.object(clock, "now", return_value=datetime(2026, 9, 7, 22, 0, tzinfo=clock.KST)), patch.object(main.reservations, "acquire") as acquire, patch.object(main.booking, "active_details", AsyncMock()) as details:
-            client = TestClient(main.app)
-            for route in ("reserve", "import-active", "active", "cancel", "return"):
-                response = client.post("/booking/" + route, json={})
-                self.assertEqual(response.status_code, 423)
-                self.assertEqual(response.json()["code"], "school_closed")
-            self.assertEqual(client.post("/identity/bind", json={}).status_code, 423)
-            self.assertEqual(client.get("/health").status_code, 200)
-            acquire.assert_not_called()
-            details.assert_not_awaited()
+class NightCollectionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_night_polling_runs_school_scan(self):
+        import collector
+        for hour in (0, 6, 22, 23):
+            with self.subTest(hour=hour), patch.object(clock, "now", return_value=datetime(2026, 9, 7, hour, tzinfo=clock.KST)), patch.object(collector, "_refresh_gate", asyncio.Lock()), patch.object(collector, "_refresh", AsyncMock()) as refresh:
+                await collector._refresh_serial([1])
+                refresh.assert_awaited_once()
+                self.assertEqual(refresh.await_args.args[1], [1])

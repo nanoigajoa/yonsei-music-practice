@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import httpx
 from bs4 import BeautifulSoup
-from clock import SchoolTransport, now as kst_now
+from clock import now as kst_now
 
 BASE = "http://165.132.176.173"
 HEADERS = {"User-Agent": "Mozilla/5.0 Edge"}
@@ -89,7 +89,7 @@ async def _read_submission(client: httpx.AsyncClient, corner_no: int, room_no: s
 async def recover_submission(student_id: str, corner_no: int, room_no: str,
                              start_at: datetime, duration_min: int) -> dict | None:
     """예약 POST를 재전송하지 않고 본인의 학교 내역만 읽는다. 없음은 실패 증거가 아니다."""
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         response = await _login(client, student_id, corner_no)
         response.raise_for_status()
         if "window.opener.location" not in response.text or "/booking/index.php" not in response.text:
@@ -176,7 +176,7 @@ async def _login(client: httpx.AsyncClient, student_id: str, corner_no: int) -> 
 
 async def validate_student(student_id: str, corner_no: int = 1) -> bool:
     """학교 키오스크가 학번을 실제 이용자로 로그인시키는지 확인한다."""
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         for _ in range(2):
             response = await _login(client, student_id, corner_no)
             text = response.text
@@ -213,7 +213,7 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
     if limit_time not in (30, 60, 90, 120):
         return {"success": False, "message": "예약 시간은 30분 단위로 최대 2시간입니다."}
 
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         login = await _login(client, student_id, corner_no)
         login.raise_for_status()
         if "window.opener.location" not in login.text or "/booking/index.php" not in login.text:
@@ -386,13 +386,13 @@ async def _active_once(client: httpx.AsyncClient, corner_no: int, booking_no: st
 
 async def active_once(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:
     """자동 상태 동기화용 단일 확인. 태그 결과를 기다리며 재시도하지 않는다."""
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         return await _active_once(client, corner_no, booking_no)
 
 
 async def active(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         # 방 앞 단말기의 태그 결과가 키오스크 중앙 서버에 도착하기까지 수 초가
         # 걸릴 수 있다. 사용자가 버튼을 여러 번 누르지 않도록 한 번의 요청에서
@@ -414,7 +414,7 @@ async def active(student_id: str, corner_no: int, booking_no: str | None = None)
 
 async def active_details(student_id: str, corner_no: int) -> dict:
     """키오스크에서 직접 태그해 사용 중인 단 하나의 예약을 읽는다."""
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         number = await _active_booking_no(client, corner_no)
         if not number:
@@ -446,7 +446,7 @@ async def active_details(student_id: str, corner_no: int) -> dict:
 
 
 async def return_room(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         number = booking_no or await _booking_no(client, corner_no)
         if not number:
@@ -459,7 +459,7 @@ async def return_room(student_id: str, corner_no: int, booking_no: str | None = 
 
 async def cancel(student_id: str, corner_no: int, room_no: str, booking_no: str | None = None) -> dict:
     """예약현황의 booking_del 경로로 시작 전 예약을 취소한다."""
-    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS, timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         page = await client.get(
             f"{BASE}/booking/booking_info.php",
