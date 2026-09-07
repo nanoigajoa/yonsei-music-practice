@@ -59,6 +59,6 @@ export function DailyReturnNotice() {
     <time dateTime="2026-09-08" className="text-xs text-gray-500">2026.09.08</time>
     <h2 className="mt-2 text-lg font-bold">{notice.title}</h2>
     <p className="mt-3 text-sm leading-6 text-gray-600">{notice.body}</p>
-    <p className="mt-2 text-xs leading-5 text-gray-500">앱에 연결된 태그 완료 예약에 적용돼요. 미태그 예약과 21:50 이후 시작 예약은 제외해요. 학교 연결 실패 시 22:00 전까지 재시도하니, 미완료 시 직접 반납해 주세요.</p>
+    <p className="mt-2 text-xs leading-5 text-gray-500">휴대폰에서 이 앱으로 예약하고 태그를 완료한 방에 적용돼요. 현장 키오스크에서 직접 빌린 방과 미태그 예약은 제외해요. 21:50에 대상을 확정하고 그 예약만 재시도해요. 학교 연결 실패 시 22:00 전까지 재시도하니, 미완료 시 직접 반납해 주세요.</p>
   </article>)}</>
 }

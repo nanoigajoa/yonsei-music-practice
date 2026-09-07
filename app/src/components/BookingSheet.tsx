@@ -268,7 +268,7 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
               </option>)}
             </select>
           </label>
-          {dailyEnabled && <p className="text-xs leading-5 text-rose-700">21:50 이전에 시작한 이용 예약은 남은 시간과 관계없이 21:50부터 자동 반납돼요.</p>}
+          {dailyEnabled && <p className="text-xs leading-5 text-rose-700">매일 21:50에 이 앱으로 빌려 사용 중인 방을 자동 반납해요. 남은 시간과 관계없이 적용돼요.</p>}
           <button onClick={reserve} disabled={loading}
             className="h-14 w-full rounded-2xl bg-rb-600 font-bold text-white disabled:opacity-50">
             {loadingAction === 'reserve' ? '실시간 확인·예약 중...' : displayedAvailable ? `${number}호 예약하기` : '실시간 확인 후 예약하기'}
