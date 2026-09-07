@@ -85,18 +85,15 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
   }
 
   if (room.occupied) {
-    const handover = room.handover === true
     const pendingTag = room.reservation_state === 'pending_tag'
     return (
       <button onClick={() => onReserve(room)}
-        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${handover ? 'bg-gray-100 border-2 border-gray-300' : pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
-        <div className={`w-1.5 h-1.5 rounded-full ${handover ? 'bg-gray-400' : pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
-        <span className={`text-xs font-bold leading-none mt-0.5 ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
-        {isOrgan && <span className={`text-[9px] ${handover ? 'text-gray-500' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
-        <span className={`text-[10px] leading-none ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
-          {pendingTag ? '인증대기' : handover
-            ? room.occupied_until ? `${room.occupied_until}부터 가능` : '곧 가능'
-            : room.occupied_until ? `사용중 ~${room.occupied_until}` : '사용중'}
+        className={`rounded-xl px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${pendingTag ? 'bg-amber-50 border-2 border-amber-300' : 'bg-rb-50 border-2 border-rb-200'}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${pendingTag ? 'bg-amber-400' : 'bg-rb-400'}`} />
+        <span className={`text-xs font-bold leading-none mt-0.5 ${pendingTag ? 'text-amber-800' : 'text-rb-800'}`}>{num}호</span>
+        {isOrgan && <span className={`text-[9px] ${pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
+        <span className={`text-[10px] leading-none ${pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
+          {pendingTag ? '인증대기' : room.occupied_until ? `사용중 ~${room.occupied_until}` : '사용중'}
         </span>
       </button>
     )
@@ -114,15 +111,14 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
     )
   }
 
-  // 운영 중이지만 가용 슬롯이 없고, 곧 빈다는 근거도 없는 상태.
-  // 회색은 반드시 '곧 가능'이라는 뜻으로만 사용한다.
+  // 예약 가능한 슬롯이 확인되기 전에는 보수적으로 사용중으로 표시한다.
   return (
     <button onClick={() => onReserve(room)}
-      className="rounded-xl bg-violet-50 border-2 border-violet-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
-      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-      <span className="text-xs font-bold text-violet-800 leading-none mt-0.5">{num}호</span>
-      {isOrgan && <span className="text-[9px] text-violet-600 leading-none">오르간</span>}
-      <span className="text-[10px] text-violet-700 leading-none">현황 확인</span>
+      className="rounded-xl bg-rb-50 border-2 border-rb-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+      <div className="w-1.5 h-1.5 rounded-full bg-rb-400" />
+      <span className="text-xs font-bold text-rb-800 leading-none mt-0.5">{num}호</span>
+      {isOrgan && <span className="text-[9px] text-rb-400 leading-none">오르간</span>}
+      <span className="text-[10px] text-rb-700 leading-none">사용중</span>
     </button>
   )
 }
@@ -246,8 +242,8 @@ export default function HomePage() {
                 type="button"
                 onClick={() => setShowAvailableOnly(false)}
                 aria-pressed={!availableOnlyActive}
-                className={`flex-1 rounded-xl bg-rb-700 py-1.5 text-center text-rb-100 active:scale-95 transition-all ${
-                  !availableOnlyActive ? 'ring-2 ring-white ring-offset-2 ring-offset-rb-600' : ''
+                className={`flex-1 rounded-xl py-1.5 text-center text-rb-100 active:scale-95 transition-colors ${
+                  !availableOnlyActive ? 'bg-rb-900' : 'bg-rb-700'
                 }`}
               >
                 <p className="text-base font-bold leading-none">{totalCount}</p>
@@ -262,8 +258,8 @@ export default function HomePage() {
                 onClick={() => setShowAvailableOnly(true)}
                 aria-pressed={availableOnlyActive}
                 aria-label={`현재 공실 ${availableCount}개만 보기`}
-                className={`flex-1 rounded-xl bg-emerald-700 py-1.5 text-center text-white active:scale-95 transition-all ${
-                  availableOnlyActive ? 'ring-2 ring-white ring-offset-2 ring-offset-rb-600' : ''
+                className={`flex-1 rounded-xl py-1.5 text-center text-white active:scale-95 transition-colors ${
+                  availableOnlyActive ? 'bg-emerald-900' : 'bg-emerald-700'
                 }`}
               >
                 <p className="text-base font-bold leading-none">{availableCount}</p>
@@ -421,8 +417,6 @@ export default function HomePage() {
             {(operating ? [
               { dot: 'bg-emerald-400', label: '공실' },
               { dot: 'bg-rb-400',      label: '사용중' },
-              { dot: 'bg-gray-400',    label: '표시 시각부터 가능' },
-              { dot: 'bg-violet-400',  label: '현황 확인' },
             ] : [
               { dot: 'bg-gray-300', label: '운영외' },
             ]).map(({ dot, label }) => (
