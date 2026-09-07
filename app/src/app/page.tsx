@@ -95,7 +95,7 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
         {isOrgan && <span className={`text-[9px] ${handover ? 'text-gray-500' : pendingTag ? 'text-amber-600' : 'text-rb-400'} leading-none`}>오르간</span>}
         <span className={`text-[10px] leading-none ${handover ? 'text-gray-700' : pendingTag ? 'text-amber-700' : 'text-rb-700'}`}>
           {pendingTag ? '인증대기' : handover
-            ? `곧 가능${room.occupied_until ? ` ~${room.occupied_until}` : ''}`
+            ? room.occupied_until ? `${room.occupied_until}부터 가능` : '곧 가능'
             : room.occupied_until ? `사용중 ~${room.occupied_until}` : '사용중'}
         </span>
       </button>
@@ -114,14 +114,15 @@ function RoomChip({ room, operating, onReserve }: { room: Room; operating: boole
     )
   }
 
-  // 운영 중이지만 가용 슬롯 없음 (예: 오늘 예약이 꽉 찼거나 반납 완료)
+  // 운영 중이지만 가용 슬롯이 없고, 곧 빈다는 근거도 없는 상태.
+  // 회색은 반드시 '곧 가능'이라는 뜻으로만 사용한다.
   return (
     <button onClick={() => onReserve(room)}
-      className="rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
-      <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-      <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
-      {isOrgan && <span className="text-[9px] text-gray-700 leading-none">오르간</span>}
-      <span className="text-[10px] text-gray-700 leading-none">곧 가능</span>
+      className="rounded-xl bg-violet-50 border-2 border-violet-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
+      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+      <span className="text-xs font-bold text-violet-800 leading-none mt-0.5">{num}호</span>
+      {isOrgan && <span className="text-[9px] text-violet-600 leading-none">오르간</span>}
+      <span className="text-[10px] text-violet-700 leading-none">현황 확인</span>
     </button>
   )
 }
@@ -241,25 +242,32 @@ export default function HomePage() {
         {status && (
           operating ? (
             <div className="flex gap-2 mt-3">
-              <div className="flex-1 rounded-xl bg-rb-700 text-rb-100 py-1.5 text-center">
+              <button
+                type="button"
+                onClick={() => setShowAvailableOnly(false)}
+                aria-pressed={!availableOnlyActive}
+                className={`flex-1 rounded-xl bg-rb-700 py-1.5 text-center text-rb-100 active:scale-95 transition-all ${
+                  !availableOnlyActive ? 'ring-2 ring-white ring-offset-2 ring-offset-rb-600' : ''
+                }`}
+              >
                 <p className="text-base font-bold leading-none">{totalCount}</p>
-                <p className="text-[10px] mt-0.5">전체</p>
-              </div>
+                <p className="text-[10px] mt-0.5">전체 보기</p>
+              </button>
               <div className="flex-1 rounded-xl bg-rb-800 text-rb-200 py-1.5 text-center">
                 <p className="text-base font-bold leading-none">{occupiedCount}</p>
                 <p className="text-[10px] mt-0.5">사용중</p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAvailableOnly((value) => !value)}
+                onClick={() => setShowAvailableOnly(true)}
                 aria-pressed={availableOnlyActive}
-                aria-label={availableOnlyActive ? '전체 방 보기' : `현재 공실 ${availableCount}개만 보기`}
+                aria-label={`현재 공실 ${availableCount}개만 보기`}
                 className={`flex-1 rounded-xl bg-emerald-700 py-1.5 text-center text-white active:scale-95 transition-all ${
                   availableOnlyActive ? 'ring-2 ring-white ring-offset-2 ring-offset-rb-600' : ''
                 }`}
               >
                 <p className="text-base font-bold leading-none">{availableCount}</p>
-                <p className="text-[10px] mt-0.5">{availableOnlyActive ? '전체 보기' : '공실만 보기'}</p>
+                <p className="text-[10px] mt-0.5">공실만 보기</p>
               </button>
             </div>
           ) : (
@@ -275,12 +283,8 @@ export default function HomePage() {
 
       {/* ── 층 탭 ── */}
       {availableOnlyActive ? (
-        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2.5 flex items-center justify-between">
-          <p className="text-sm font-bold text-emerald-800">현재 공실 {availableCount}개</p>
-          <button type="button" onClick={() => setShowAvailableOnly(false)}
-            className="min-h-9 px-3 rounded-full bg-white border border-emerald-200 text-xs font-bold text-emerald-700 active:scale-95 transition-transform">
-            전체 방 보기
-          </button>
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3 text-center">
+          <p className="text-sm font-bold text-emerald-800">현재 공실 {availableCount}개만 표시 중</p>
         </div>
       ) : (
         <div className="bg-white border-b border-gray-100 px-4 pt-3 pb-2 flex gap-2">
@@ -417,7 +421,8 @@ export default function HomePage() {
             {(operating ? [
               { dot: 'bg-emerald-400', label: '공실' },
               { dot: 'bg-rb-400',      label: '사용중' },
-              { dot: 'bg-gray-400',    label: '곧 가능' },
+              { dot: 'bg-gray-400',    label: '표시 시각부터 가능' },
+              { dot: 'bg-violet-400',  label: '현황 확인' },
             ] : [
               { dot: 'bg-gray-300', label: '운영외' },
             ]).map(({ dot, label }) => (
