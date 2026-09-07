@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Room } from '@/hooks/useRoomStatus'
 import { auth } from '@/lib/firebase'
+import { canStartBooking } from '@/lib/bookingHours'
 import { bookingApiErrorMessage } from '@/lib/bookingApiError'
 import { bookingFailureReason, trackBookingEvent } from '@/lib/bookingAnalytics'
 import {
@@ -117,6 +118,11 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   }
 
   async function reserve() {
+    if (!canStartBooking()) {
+      setError(true)
+      setMessage('예약은 오전 7시부터 가능합니다.')
+      return
+    }
     if (!YONSEI_STUDENT_ID_PATTERN.test(studentId)) {
       setError(true); setMessage('연세대학교 10자리 학번을 다시 등록해 주세요.'); return
     }

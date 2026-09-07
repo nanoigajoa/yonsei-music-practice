@@ -25,12 +25,6 @@ const CONN_COLOR: Record<string, string> = {
   error:      'text-white',
 }
 
-// ── 운영 시간 판별 (07:00–22:00) ──────────────────────────
-function isOperatingHours(now: Date = new Date()): boolean {
-  const min = now.getHours() * 60 + now.getMinutes()
-  return min >= 7 * 60 && min < 22 * 60
-}
-
 // ── corner → 동 ──────────────────────────────────────────
 function buildingOf(cornerNo: number): 'A동' | 'B동' {
   return [1, 2, 3, 4].includes(cornerNo) ? 'A동' : 'B동'
@@ -67,22 +61,10 @@ function bookingPeriod(booking: ActiveBooking) {
 }
 
 // ── 방 칩 ────────────────────────────────────────────────
-function RoomChip({ room, operating, onReserve }: { room: Room; operating: boolean; onReserve: (room: Room) => void }) {
+function RoomChip({ room, onReserve }: { room: Room; onReserve: (room: Room) => void }) {
   const num     = roomNum(room.name)
   const isOrgan = room.name.includes('오르간')
   const period  = room.available_periods[0]
-
-  // 운영외 시간이면 모두 회색
-  if (!operating) {
-    return (
-      <div className="rounded-xl bg-gray-100 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center">
-        <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-        <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
-        {isOrgan && <span className="text-[9px] text-gray-700 leading-none">오르간</span>}
-        <span className="text-[10px] text-gray-700 leading-none">운영외</span>
-      </div>
-    )
-  }
 
   if (room.occupied) {
     const handover = room.handover === true
@@ -140,7 +122,7 @@ export default function HomePage() {
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null)
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
 
-  // 운영 시간 표시 갱신
+  // 현재 시각 표시 갱신
   useEffect(() => {
     const initial = setTimeout(() => setNow(Date.now()), 0)
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -161,7 +143,6 @@ export default function HomePage() {
     : null
   const floorData   = byFloor[activeFloor] ?? {}
   const corners     = Object.keys(floorData).map(Number).sort((a, b) => a - b)
-  const operating   = now !== null && isOperatingHours(new Date(now))
 
   function openBooking(room: Room) {
     if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
@@ -177,7 +158,6 @@ export default function HomePage() {
   const occupiedCount  = status?.rooms.filter(r => r.occupied).length ?? 0
 
   function floorAvailable(floor: number) {
-    if (!operating) return 0
     return Object.values(byFloor[floor] ?? {})
       .flat()
       .filter(isCurrentlyAvailable).length
@@ -196,7 +176,7 @@ export default function HomePage() {
         .filter((group) => group.rooms.length > 0),
     )
 
-  const availableOnlyActive = operating && showAvailableOnly
+  const availableOnlyActive = showAvailableOnly
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto bg-white">
@@ -240,7 +220,6 @@ export default function HomePage() {
 
         {/* 요약 통계 */}
         {status && (
-          operating ? (
             <div className="flex gap-2 mt-3">
               <button
                 type="button"
@@ -270,11 +249,6 @@ export default function HomePage() {
                 <p className="text-[10px] mt-0.5">공실만 보기</p>
               </button>
             </div>
-          ) : (
-            <div className="mt-3 rounded-xl bg-rb-700 px-4 py-2 text-center">
-              <p className="text-white text-xs font-medium">🌙 운영 시간 외 · 07:00 – 22:00 운영</p>
-            </div>
-          )
         )}
       </header>
 
@@ -347,9 +321,7 @@ export default function HomePage() {
         {status && !availableOnlyActive && corners.map((cornerNo) => {
           const rooms     = floorData[cornerNo]
           if (!rooms?.length) return null
-          const availCount = operating
-            ? rooms.filter(isCurrentlyAvailable).length
-            : 0
+          const availCount = rooms.filter(isCurrentlyAvailable).length
           const building  = buildingOf(cornerNo)
           return (
             <section key={cornerNo}>
@@ -358,18 +330,16 @@ export default function HomePage() {
                   {activeFloor}층 · <span className="text-rb-700">{building}</span> · {sectionLabel(rooms)}
                 </h2>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  !operating
-                    ? 'bg-gray-100 text-gray-700'
-                    : availCount > 0
+                  availCount > 0
                     ? 'bg-emerald-50 text-emerald-700'
                     : 'bg-gray-100 text-gray-700'
                 }`}>
-                  {!operating ? '운영외' : availCount > 0 ? `공실 ${availCount}개` : '공실 없음'}
+                  {availCount > 0 ? `공실 ${availCount}개` : '공실 없음'}
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {rooms.map((room) => (
-                  <RoomChip key={room.name} room={room} operating={operating} onReserve={openBooking} />
+                  <RoomChip key={room.name} room={room} onReserve={openBooking} />
                 ))}
               </div>
             </section>
@@ -388,7 +358,7 @@ export default function HomePage() {
             </div>
             <div className="grid grid-cols-4 gap-2">
               {rooms.map((room) => (
-                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} operating={operating} onReserve={openBooking} />
+                <RoomChip key={`${room.corner_no}-${room.name}`} room={room} onReserve={openBooking} />
               ))}
             </div>
           </section>
@@ -418,14 +388,12 @@ export default function HomePage() {
         {/* 범례 */}
         {status && (
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2">
-            {(operating ? [
+            {[
               { dot: 'bg-emerald-400', label: '공실' },
               { dot: 'bg-rb-400',      label: '사용중' },
               { dot: 'bg-gray-400',    label: '표시 시각부터 가능' },
               { dot: 'bg-violet-400',  label: '현황 확인' },
-            ] : [
-              { dot: 'bg-gray-300', label: '운영외' },
-            ]).map(({ dot, label }) => (
+            ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1.5 text-xs text-gray-700">
                 <span className={`w-2 h-2 rounded-full ${dot}`} />
                 {label}
