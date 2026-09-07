@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 
 import duckdb
 import httpx
+from api.clock import SchoolTransport, school_access_allowed
 from bs4 import BeautifulSoup
 
 # ── 설정 ──────────────────────────────────────────────
@@ -247,8 +248,11 @@ async def run():
     _init_db()
     log.info("pusher 시작 | %d개 코너 | %ds 간격 | → %s", len(corners), INTERVAL, API_URL)
 
-    async with httpx.AsyncClient(headers=HEADERS) as client:
+    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS) as client:
         while True:
+            if not school_access_allowed():
+                await asyncio.sleep(INTERVAL)
+                continue
             now = datetime.now()
             try:
                 all_rooms: List[dict] = []

@@ -18,7 +18,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from models import Period, Room, StatusResponse
-from clock import now as kst_now
+from clock import SchoolTransport, school_access_allowed, now as kst_now
 
 # ── 설정 ──────────────────────────────────────────────
 KIOSK_URL = "http://165.132.176.173/booking/main_list.php"
@@ -284,6 +284,8 @@ async def _fetch_corner(client: httpx.AsyncClient, corner_no: int) -> List[Room]
     seen_names: set[str] = set()
 
     for page in ["", "2", "3", "4"]:
+        if not school_access_allowed():
+            return all_rooms
         try:
             res = await client.get(
                 KIOSK_URL,
@@ -347,9 +349,11 @@ def _status_with_rooms(rooms: List[Room]) -> StatusResponse:
 async def _refresh_one_corner(corner_no: int) -> bool:
     """취소/반납한 방이 속한 코너만 원본에서 다시 읽는다."""
     global _state
+    if not school_access_allowed():
+        return False
     # 전체 49개 폴링을 기다리지 않고 해당 코너를 바로 읽는다.
     # 취소 전에 시작한 전체 폴링은 코너 세대 검사로 덮어쓰기를 막는다.
-    async with httpx.AsyncClient(headers=HEADERS) as client:
+    async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS) as client:
         fetched = await _fetch_corner(client, corner_no)
     if not fetched:
         # 조회 실패를 공실로 오인하는 것보다 기존 상태 유지가 안전하다.
@@ -454,8 +458,10 @@ async def _refresh(client: httpx.AsyncClient, corners: List[int]) -> None:
 
 async def _refresh_serial(corners: List[int]) -> None:
     """키오스크 전체 조회는 프로세스당 한 번만 수행한다."""
+    if not school_access_allowed():
+        return
     async with _refresh_gate:
-        async with httpx.AsyncClient(headers=HEADERS) as client:
+        async with httpx.AsyncClient(transport=SchoolTransport(), headers=HEADERS) as client:
             await _refresh(client, corners)
 
 

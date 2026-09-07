@@ -25,3 +25,15 @@ class RefreshCoalescingTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.gather(*(collector.refresh_now() for _ in range(50)))
 
         self.assertEqual(calls, 1)
+
+
+# These tests exercise daytime behavior; night boundary cases live in test_school_hours.py.
+def setUpModule():
+    global _school_clock_patch
+    import clock
+    _school_clock_patch = patch.object(clock, "now", return_value=clock.datetime(2026, 9, 7, 12, 0, tzinfo=clock.KST))
+    _school_clock_patch.start()
+
+
+def tearDownModule():
+    _school_clock_patch.stop()

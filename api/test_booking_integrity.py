@@ -84,6 +84,8 @@ class BookingIntegrityTest(unittest.IsolatedAsyncioTestCase):
                                  '<td>119호</td></tr></table></div><div class="reserve">'
                                  f'<a onclick="go(\'1\',\'pc119\',\'1\',\'2\',\'{self.now.hour}\',\'{self.now.minute}\')">예약</a></div></div>')
         if url.endswith("reserve.php"):
+            if self.mode == "form_rejected":
+                return self.response(url, '<script>var title="ERROR";var url="booking_result.php?result_code=2-1&msg=해당 시간에 이미 예약건이 존재합니다.";</script>')
             return self.response(url, '<form><input name="native_token" value="test"></form>')
         if url.endswith("booking_info.php"):
             if self.mode == "receipt_timeout":
@@ -198,6 +200,14 @@ class BookingIntegrityTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(again.status, "uncertain")
         self.assertEqual(self.posts, 1)
 
+    async def test_school_error_popup_in_preparation_never_sends_reservation(self):
+        self.mode = "form_rejected"
+        result = await self.reserve()
+        self.assertFalse(result["success"])
+        self.assertFalse(result["pending"])
+        self.assertEqual(self.posts, 0)
+        self.assertEqual(self.record().status, "failed")
+
     async def test_uncertain_ends_only_after_planned_end_without_reposting(self):
         self.mode = "post_timeout"
         await main.reserve_room(self.request, self.user)
@@ -297,3 +307,15 @@ class BookingIntegrityTest(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(booking._submission_evidence(invalid, "119", self.start, 120))
         self.assertIsNone(booking._submission_evidence(receipt, "119", self.start + timedelta(minutes=10), 120))
         self.assertIsNone(booking._submission_evidence(receipt, "119", self.start, 60))
+
+
+# These tests exercise daytime behavior; night boundary cases live in test_school_hours.py.
+def setUpModule():
+    global _school_clock_patch
+    import clock
+    _school_clock_patch = patch.object(clock, "now", return_value=clock.datetime(2026, 9, 7, 12, 0, tzinfo=clock.KST))
+    _school_clock_patch.start()
+
+
+def tearDownModule():
+    _school_clock_patch.stop()
