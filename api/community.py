@@ -69,10 +69,20 @@ def message_payload(row, uid: str | None = None):
             "created_at": row["created"], "mine": row["uid"] == uid}
 
 
-def history(uid: str):
+def history_page(uid: str, before: int | None = None, limit: int = 100):
     with database() as conn:
-        rows = conn.execute("SELECT * FROM messages WHERE created>? ORDER BY id DESC LIMIT 100", (time.time()-7*86400,)).fetchall()
-    return [message_payload(r, uid) for r in reversed(rows)]
+        if before is None:
+            rows = conn.execute("SELECT * FROM messages WHERE created>? ORDER BY id DESC LIMIT ?",
+                                (time.time()-7*86400, limit+1)).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM messages WHERE id<? AND created>? ORDER BY id DESC LIMIT ?",
+                                (before, time.time()-7*86400, limit+1)).fetchall()
+    return {"messages": [message_payload(r, uid) for r in reversed(rows[:limit])],
+            "has_more": len(rows) > limit, "nickname": "익명"}
+
+
+def history(uid: str):
+    return history_page(uid)["messages"]
 
 
 class ChatMessage(BaseModel):
@@ -110,8 +120,10 @@ def practice(response: Response, period: Literal["daily", "weekly", "monthly"] =
 
 
 @router.get("/lounge")
-def lounge(user: dict = Depends(member)):
-    return {"messages": history(user["uid"]), "nickname": "익명"}
+def lounge(response: Response, before: int | None = Query(None, gt=0, le=9223372036854775807),
+           limit: int = Query(100, ge=1, le=100), user: dict = Depends(member)):
+    response.headers["Cache-Control"] = "private, no-store"
+    return history_page(user["uid"], before, limit)
 
 
 @router.websocket("/lounge/ws")
@@ -139,7 +151,7 @@ async def lounge_socket(ws: WebSocket):
         async def sender():
             while True:
                 await asyncio.wait_for(ws.send_json(await queue.get()), timeout=10)
-        queue.put_nowait({"type": "history", "messages": await asyncio.to_thread(history, uid), "nickname": "익명"})
+        queue.put_nowait({"type": "history", **await asyncio.to_thread(history_page, uid)})
         send_task = asyncio.create_task(sender())
         expires = time.monotonic() + 50*60
         while time.monotonic() < expires:

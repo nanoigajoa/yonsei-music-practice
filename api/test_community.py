@@ -97,6 +97,47 @@ class CommunityTest(unittest.TestCase):
         self.assertEqual(result['nickname'],'익명')
         self.assertEqual([m['author'] for m in result['messages']],['익명','익명'])
 
+    def test_history_cursor_pages_without_duplicates_when_new_messages_arrive(self):
+        with c.database() as conn:
+            for number in range(1,231):
+                conn.execute('INSERT INTO messages(uid,client_id,text,created) VALUES(?,?,?,?)',
+                             ('user-a' if number%2 else 'user-b',str(number),str(number),self.now.timestamp()))
+        first=self.client.get('/community/lounge').json()
+        self.assertEqual(len(first['messages']),100)
+        self.assertTrue(first['has_more'])
+        self.assertEqual([m['id'] for m in first['messages']],list(range(131,231)))
+        with c.database() as conn:
+            conn.execute('INSERT INTO messages(uid,client_id,text,created) VALUES(?,?,?,?)',('user-b','new','new',self.now.timestamp()))
+        seen=[m['id'] for m in first['messages']]
+        before=seen[0]
+        while True:
+            response=self.client.get(f'/community/lounge?before={before}&limit=50')
+            self.assertEqual(response.headers['cache-control'],'private, no-store')
+            page=response.json()
+            ids=[m['id'] for m in page['messages']]
+            self.assertLessEqual(len(ids),50)
+            self.assertTrue(all(i<before for i in ids))
+            self.assertFalse(set(ids)&set(seen))
+            self.assertTrue(all(m['author']=='익명' for m in page['messages']))
+            seen=ids+seen
+            if not page['has_more']:break
+            before=ids[0]
+        self.assertEqual(seen,list(range(1,231)))
+
+    def test_history_page_rejects_invalid_cursor_and_omits_expired_messages(self):
+        for query in ('before=0','before=-1','before=9223372036854775808','limit=0','limit=101'):
+            self.assertEqual(self.client.get('/community/lounge?'+query).status_code,422)
+        with c.database() as conn:
+            conn.execute('INSERT INTO messages(uid,client_id,text,created) VALUES(?,?,?,?)',('user-a','expired','old',self.now.timestamp()-8*86400))
+            conn.execute('INSERT INTO messages(uid,client_id,text,created) VALUES(?,?,?,?)',('user-b','current','new',self.now.timestamp()))
+        first=self.client.get('/community/lounge?limit=1').json()
+        self.assertFalse(first['has_more'])
+        self.assertEqual(first['messages'][0]['text'],'new')
+        self.assertFalse(first['messages'][0]['mine'])
+        oldest=self.client.get('/community/lounge?before=2&limit=50').json()
+        self.assertEqual(oldest['messages'],[])
+        self.assertFalse(oldest['has_more'])
+
     def test_empty_control_and_oversized_chat_rejected(self):
         for text in ('   ','hello\x00'):
             with self.assertRaises(HTTPException):c.save_message('user-a',c.ChatMessage(client_id='abcdefghijklmnop',text=text))
