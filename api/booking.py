@@ -28,6 +28,68 @@ class ReservationOutcomeUnknown(RuntimeError):
     """학교에 전송했을 수 있으나 일치하는 예약 내역을 아직 확인하지 못했다."""
 
 
+class PenaltyPageInvalid(RuntimeError):
+    """학교 패널티 화면을 안전하게 해석할 수 없다."""
+
+
+def _penalty_entry(text: str) -> dict | None:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    room = re.search(r"(?<!\d)(\d{3})\s*호", normalized)
+    date = re.search(r"(\d{4})[./년-]\s*(\d{1,2})[./월-]\s*(\d{1,2})일?", normalized)
+    times = re.search(
+        r"(\d{1,2}:\d{2}(?::\d{2})?)\s*[~-]\s*(\d{1,2}:\d{2}(?::\d{2})?)",
+        normalized,
+    )
+    if not room or not date or not times:
+        return None
+    location = re.search(r"음악관\s*([AB])\s*(\d층)", normalized)
+    return {
+        "location": f"음악관{location.group(1)} {location.group(2)}" if location else None,
+        "room_no": room.group(1),
+        "date": f"{int(date.group(1)):04d}-{int(date.group(2)):02d}-{int(date.group(3)):02d}",
+        "start_time": times.group(1).zfill(8 if times.group(1).count(":") == 2 else 5),
+        "end_time": times.group(2).zfill(8 if times.group(2).count(":") == 2 else 5),
+    }
+
+
+def _parse_penalty_page(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    body = soup.select_one("#Reserve-Body")
+    if body is None:
+        raise PenaltyPageInvalid("패널티 본문이 없습니다.")
+    count_match = re.search(r"총\s*패널티\s*(?:횟수|회수)\s*:\s*(\d+)\s*회", body.get_text(" ", strip=True))
+    if count_match is None:
+        raise PenaltyPageInvalid("패널티 횟수를 찾지 못했습니다.")
+
+    entries = []
+    seen = set()
+    candidates = body.select("tr") + body.select("li")
+    for candidate in candidates:
+        entry = _penalty_entry(candidate.get_text(" ", strip=True))
+        if entry is None:
+            continue
+        key = (entry["location"], entry["room_no"], entry["date"], entry["start_time"], entry["end_time"])
+        if key not in seen:
+            seen.add(key)
+            entries.append(entry)
+    return {"success": True, "total_count": int(count_match.group(1)), "entries": entries}
+
+
+async def penalty(student_id: str, corner_no: int = 1) -> dict:
+    """학교의 본인 패널티 화면만 조회하며 예약 상태는 변경하지 않는다."""
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        login = await _login(client, student_id, corner_no)
+        login.raise_for_status()
+        if "window.opener.location" not in login.text or "/booking/index.php" not in login.text:
+            raise PenaltyPageInvalid("학교 로그인을 확인하지 못했습니다.")
+        page = await client.get(
+            f"{BASE}/booking/info2.php",
+            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
+        )
+        page.raise_for_status()
+        return {**_parse_penalty_page(page.text), "checked_at": kst_now().isoformat()}
+
+
 def _submission_evidence(html: str, room_no: str, start_at: datetime, duration_min: int,
                          active_booking_no: str | None = None) -> dict | None:
     """방·날짜·시작·종료·학교 식별자가 일치하는 단 하나의 예약만 복원한다."""
