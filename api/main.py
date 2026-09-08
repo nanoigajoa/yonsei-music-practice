@@ -331,10 +331,6 @@ class CurrentBookingRequest(BaseModel):
     student_id: str = Field(pattern=r"^20\d{8}$")
 
 
-class PenaltyRequest(BaseModel):
-    student_id: str = Field(pattern=r"^20\d{8}$")
-
-
 def _result_for_existing_request(record: reservations.Reservation, user: dict, student_id: str) -> dict:
     """이미 처리 중이거나 완료된 동일 요청의 현재 결과를 안전하게 복원한다."""
     if record.status in reservations.UNCONFIRMED_STATUSES:
@@ -424,20 +420,6 @@ async def health():
         "daily_return_enabled": DAILY_RETURN_ENABLED,
         "daily_return_time": "21:50" if DAILY_RETURN_ENABLED else None,
     }
-
-
-@app.post("/penalty")
-async def penalty(data: PenaltyRequest, user: dict = Depends(current_user)):
-    """Google 계정에 연결된 본인 학번의 학교 패널티만 조회한다."""
-    _require_bound_student(user, data.student_id)
-    try:
-        return await booking.penalty(data.student_id)
-    except httpx.HTTPError as exc:
-        log.warning("패널티 조회 연결 실패: %s", exc)
-        raise HTTPException(502, "학교 키오스크에서 패널티를 조회할 수 없습니다. 잠시 뒤 다시 시도해 주세요.") from exc
-    except booking.PenaltyPageInvalid as exc:
-        log.warning("패널티 화면 해석 실패: %s", exc)
-        raise HTTPException(502, "학교 패널티 정보를 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.") from exc
 
 
 @app.get("/status", response_model=StatusResponse)
