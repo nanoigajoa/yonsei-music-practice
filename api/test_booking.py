@@ -250,6 +250,7 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             (None, "777", "반납 되었습니다", False),
             ("777", "888", "반납 되었습니다", False),
             ("777", None, "반납 되었습니다", False),
+            ("777", "", "", True),
             ("777", "777", "반납 되었습니다", True),
             ("777", "777", "오류: 반납 되었습니다", False),
         ]:
@@ -258,6 +259,8 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(booking, "_login", AsyncMock()), patch.object(booking, "_active_booking_no", AsyncMock(return_value=actual)):
                 result = await booking.return_room("student", 1, expected)
             self.assertEqual(result["success"], success)
+            if actual == "":
+                self.assertTrue(result["already_returned"])
             self.assertEqual(client.get.await_count, int(bool(expected) and expected == actual))
 
 

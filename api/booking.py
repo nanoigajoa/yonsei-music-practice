@@ -367,13 +367,13 @@ async def _booking_no(client: httpx.AsyncClient, corner_no: int) -> str | None:
 
 
 async def _active_booking_no(client: httpx.AsyncClient, corner_no: int) -> str | None:
-    """태그 후 실제 이용중인 예약만 index 화면에서 읽는다."""
+    """태그 후 실제 이용중인 예약을 읽는다. 명시적인 빈 값은 빈 문자열로 보존한다."""
     index = await client.get(
         f"{BASE}/booking/index.php",
         params={"reload": 1, "corner_no": corner_no, "TimeCellSize": 0},
     )
     index.raise_for_status()
-    match = re.search(r'var booking_no\s*=\s*["\'](\d+)["\']', index.text)
+    match = re.search(r'var booking_no\s*=\s*["\'](\d*)["\']', index.text)
     return match.group(1) if match else None
 
 
@@ -449,7 +449,15 @@ async def return_room(student_id: str, corner_no: int, booking_no: str | None = 
     async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)
         number = await _active_booking_no(client, corner_no)
-        if not booking_no or number != booking_no:
+        if not booking_no:
+            return {"success": False, "message": "저장된 예약번호를 확인하지 못했습니다."}
+        if number == "":
+            return {
+                "success": True,
+                "already_returned": True,
+                "message": "키오스크에서 이미 반납된 상태를 확인했습니다.",
+            }
+        if number != booking_no:
             return {"success": False, "message": "현재 사용 중인 예약번호가 일치하지 않습니다. 상태를 확인해 주세요."}
         result = await client.get(f"{BASE}/booking/return.php", params={"booking_no": number})
     result.raise_for_status()
