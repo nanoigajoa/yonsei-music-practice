@@ -10,6 +10,25 @@ import { AppMenu } from '@/components/AppMenu'
 import { DEPARTMENTS, Department } from '@/types/collections'
 import { PracticeHistory } from '@/components/PracticeHistory'
 
+interface PenaltyEntry {
+  location: string | null
+  room_no: string
+  date: string
+  start_time: string
+  end_time: string
+}
+
+interface PenaltyData {
+  success: true
+  total_count: number
+  entries: PenaltyEntry[]
+  checked_at: string
+}
+
+const BOOKING_API_URL = process.env.NEXT_PUBLIC_BOOKING_API_URL
+  ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
+  ?? 'http://localhost:8000'
+
 const DEPT_EMOJI: Record<string, string> = {
   '피아노과':   '🎹',
   '성악과':     '🎤',
@@ -105,6 +124,9 @@ export default function MyPage() {
 
   const [googleState, setGoogleState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [showEdit,    setShowEdit]    = useState(false)
+  const [penaltyState, setPenaltyState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [penaltyData, setPenaltyData] = useState<PenaltyData | null>(null)
+  const [penaltyError, setPenaltyError] = useState('')
 
   async function handleLinkGoogle() {
     setGoogleState('loading')
@@ -120,6 +142,28 @@ export default function MyPage() {
     if (result === 'restored') setGoogleState('done')
     else if (result === 'error') setGoogleState('error')
     else setGoogleState('idle')
+  }
+
+  async function fetchPenalty() {
+    const studentId = getStudentId()
+    if (!user || !studentId) return
+    setPenaltyState('loading')
+    setPenaltyError('')
+    try {
+      const idToken = await user.getIdToken(true)
+      const response = await fetch(`${BOOKING_API_URL}/penalty`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ student_id: studentId }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.detail ?? '패널티를 조회하지 못했습니다.')
+      setPenaltyData(data as PenaltyData)
+      setPenaltyState('ready')
+    } catch (cause) {
+      setPenaltyState('error')
+      setPenaltyError(cause instanceof Error ? cause.message : '패널티를 조회하지 못했습니다.')
+    }
   }
 
   return (
@@ -208,6 +252,50 @@ export default function MyPage() {
             className="h-9 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-600">
             변경
           </button>
+        </div>
+
+        <div className="rounded-2xl bg-gray-50 border-2 border-gray-100 px-4 py-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-gray-800">내 패널티 조회</p>
+              <p className="text-xs text-gray-500 mt-0.5">학교 키오스크의 본인 내역을 지금 확인해요.</p>
+            </div>
+            <button onClick={fetchPenalty} disabled={penaltyState === 'loading'}
+              className="h-9 px-3 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-700 disabled:opacity-40">
+              {penaltyState === 'loading' ? '조회 중...' : penaltyState === 'ready' ? '새로고침' : '조회하기'}
+            </button>
+          </div>
+
+          {penaltyState === 'ready' && penaltyData && (
+            <div className={`rounded-xl border px-3.5 py-3 ${
+              penaltyData.total_count > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'
+            }`}>
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className={`text-xs font-bold ${penaltyData.total_count > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>학교 조회 결과</p>
+                  <p className={`text-2xl font-bold mt-0.5 ${penaltyData.total_count > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
+                    누적 {penaltyData.total_count}회
+                  </p>
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  {new Date(penaltyData.checked_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+              {penaltyData.entries.length > 0 && (
+                <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
+                  {penaltyData.entries.map((entry, index) => (
+                    <div key={`${entry.date}-${entry.room_no}-${entry.start_time}-${index}`} className="text-xs text-gray-700">
+                      <p className="font-bold">{entry.location ? `${entry.location} · ` : ''}{entry.room_no}호</p>
+                      <p className="mt-0.5 text-gray-500">{entry.date} · {entry.start_time}~{entry.end_time}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {penaltyState === 'error' && <p className="text-xs font-medium text-red-500">{penaltyError}</p>}
+          <p className="text-[11px] leading-4 text-gray-400">학교가 표시한 누적 횟수와 내역만 보여주며, 현재 이용 제한 여부는 임의로 계산하지 않아요.</p>
         </div>
 
         <Link href="/alarm" className="block rounded-2xl bg-rb-50 border border-rb-200 p-4 text-rb-800">
