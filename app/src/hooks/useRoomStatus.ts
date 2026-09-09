@@ -15,6 +15,7 @@ const API_URL = process.env.NEXT_PUBLIC_STATUS_API_URL
   ?? 'https://yonsei-practice-api.fly.dev'
 const RECONNECT_DELAY = 5_000
 const POLL_INTERVAL   = 60_000
+const STATUS_TIMEOUT  = 10_000
 
 export interface Period {
   start: string  // "16:50"
@@ -51,23 +52,43 @@ export function useRoomStatus() {
   const esRef    = useRef<EventSource | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const applyStatus = useCallback((next: RoomStatus) => {
+    setStatus((current) => {
+      if (!current) return next
+      const currentTime = Date.parse(current.updated_at)
+      const nextTime = Date.parse(next.updated_at)
+      return Number.isFinite(currentTime) && Number.isFinite(nextTime) && nextTime < currentTime
+        ? current
+        : next
+    })
+  }, [])
+
   // ── /status 단건 fetch (수동 새로고침 + 폴링 폴백 공용) ──
-  const fetchOnce = useCallback(async () => {
+  const fetchOnce = useCallback(async (refreshCorner?: number) => {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), STATUS_TIMEOUT)
     try {
-      const res = await fetch(`${API_URL}/status`)
+      const params = new URLSearchParams({ _: Date.now().toString() })
+      if (refreshCorner !== undefined) params.set('refresh_corner', refreshCorner.toString())
+      const res = await fetch(`${API_URL}/status?${params}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
       if (!res.ok) return false
-      setStatus(await res.json() as RoomStatus)
+      applyStatus(await res.json() as RoomStatus)
       return true
     } catch {
       return false
+    } finally {
+      window.clearTimeout(timeout)
     }
-  }, [])
+  }, [applyStatus])
 
   // ── 수동 새로고침 ──────────────────────────────────────
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (refreshCorner?: number) => {
     if (refreshing) return
     setRefreshing(true)
-    await fetchOnce()
+    await fetchOnce(refreshCorner)
     setRefreshing(false)
   }, [refreshing, fetchOnce])
 
@@ -88,7 +109,7 @@ export function useRoomStatus() {
       es.onopen = () => setConnState('live')
       es.onmessage = (e) => {
         try {
-          setStatus(JSON.parse(e.data) as RoomStatus)
+          applyStatus(JSON.parse(e.data) as RoomStatus)
           setConnState('live')
         } catch { /* noop */ }
       }
@@ -110,7 +131,7 @@ export function useRoomStatus() {
       esRef.current?.close()
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [fetchOnce])
+  }, [applyStatus, fetchOnce])
 
   // ── 층별 그룹 ─────────────────────────────────────────
   const byFloor = status?.rooms.reduce<Record<number, Record<number, Room[]>>>(

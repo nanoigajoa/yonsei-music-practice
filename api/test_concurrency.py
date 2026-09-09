@@ -29,6 +29,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         main._reservation_gate_loop = None
         main._tag_sync_gate = None
         main._tag_sync_gate_loop = None
+        main._pending_missing_checks.clear()
         collector._pending_reservations.clear()
 
     async def asyncTearDown(self):
@@ -264,7 +265,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             return {"success": True, "message": "예약 취소 완료"}
 
         with patch.object(main.booking, "cancel", AsyncMock(side_effect=school_cancel)), patch.object(
-            main.booking, "active_once", AsyncMock(return_value={"success": True, "active": True})
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "active"})
         ) as active, patch.object(
             main.collector, "refresh_corner_now", AsyncMock(return_value=True)
         ):
@@ -298,7 +299,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         async def school_active(*_args):
             tag_started.set()
             await release_tag.wait()
-            return {"success": True, "active": True}
+            return {"state": "active"}
 
         async def cancel_once() -> int:
             try:
@@ -307,7 +308,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             except HTTPException as exc:
                 return exc.status_code
 
-        with patch.object(main.booking, "active_once", AsyncMock(side_effect=school_active)), patch.object(
+        with patch.object(main.booking, "pending_state_once", AsyncMock(side_effect=school_active)), patch.object(
             main.booking, "cancel", AsyncMock()
         ) as cancel, patch.object(main.collector, "mark_active", AsyncMock()):
             tag_task = asyncio.create_task(main._mark_tagged_active(record))
@@ -363,7 +364,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
                              corner_no=1, room_no="119")
         reservations.finalize("pending-one", start_at=start, duration_min=120, kiosk_booking_no="booking")
 
-        with patch.object(main.booking, "active_once", AsyncMock(return_value={"success": True, "active": True})), patch.object(
+        with patch.object(main.booking, "pending_state_once", AsyncMock(return_value={"state": "active"})), patch.object(
             main.collector, "mark_active", AsyncMock()
         ) as mark_active:
             updated = await main.sync_pending_tags_once()
@@ -371,6 +372,53 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(updated, 1)
         self.assertEqual(reservations.get("pending-one").status, "active")
         mark_active.assert_awaited_once()
+
+    async def test_kiosk_cancel_before_tag_clears_app_reservation_after_two_checks(self):
+        start = (datetime.now() + timedelta(minutes=5)).replace(second=0, microsecond=0)
+        reservations.bind_student("user", student_key("2022172528"))
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528",
+            student_key=student_key("2022172528"), corner_no=1, room_no="119",
+        )
+        reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="booking",
+        )
+
+        with patch.object(
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "missing"})
+        ) as school_state, patch.object(
+            main.collector, "clear_reserved", AsyncMock(return_value=True)
+        ) as clear, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh:
+            self.assertEqual(await main.sync_pending_tags_once(), 0)
+            self.assertEqual(reservations.get("pending-one").status, "pending_tag")
+            self.assertEqual(await main.sync_pending_tags_once(), 0)
+
+        self.assertEqual(reservations.get("pending-one").status, "cancelled")
+        self.assertIsNone(reservations.open_for_uid("user"))
+        self.assertEqual(school_state.await_count, 2)
+        clear.assert_awaited_once_with(1, "119", reservation_id="pending-one")
+        refresh.assert_awaited_once_with(1)
+
+    async def test_single_missing_check_does_not_clear_pending_reservation(self):
+        start = (datetime.now() + timedelta(minutes=5)).replace(second=0, microsecond=0)
+        reservations.bind_student("user", student_key("2022172528"))
+        reservations.acquire(
+            id="pending-one", uid="user", student_id="2022172528",
+            student_key=student_key("2022172528"), corner_no=1, room_no="119",
+        )
+        reservations.finalize(
+            "pending-one", start_at=start, duration_min=120, kiosk_booking_no="booking",
+        )
+
+        with patch.object(
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "missing"})
+        ), patch.object(main.collector, "clear_reserved", AsyncMock()) as clear:
+            await main.sync_pending_tags_once()
+
+        self.assertEqual(reservations.get("pending-one").status, "pending_tag")
+        clear.assert_not_awaited()
 
     async def test_different_rooms_are_throttled_to_three_kiosk_requests(self):
         active = 0

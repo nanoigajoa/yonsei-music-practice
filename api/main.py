@@ -43,6 +43,7 @@ MAX_CONCURRENT_TAG_SYNC_CHECKS = max(1, int(os.getenv("MAX_CONCURRENT_TAG_SYNC_C
 TAG_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("TAG_SYNC_INTERVAL_SECONDS", "5")))
 RECOVERY_INTERVAL_SECONDS = 15
 _recovery_attempts: dict[str, float] = {}
+_pending_missing_checks: dict[str, int] = {}
 _inflight_reservations: set[str] = set()
 _recovery_gate: asyncio.Semaphore | None = None
 _recovery_gate_loop: asyncio.AbstractEventLoop | None = None
@@ -117,18 +118,39 @@ async def _reservation_action_gate(reservation_id: str):
 
 
 async def _mark_tagged_active(record: reservations.Reservation) -> bool:
-    """키오스크가 태그 완료를 보이면 pending_tag를 active로 단 한 번 전이한다."""
+    """학교의 인증 완료나 현장 취소를 pending_tag에 단 한 번 반영한다."""
     async with _reservation_action_gate(record.id):
         current = reservations.get(record.id)
         if not current or current.status != "pending_tag":
+            _pending_missing_checks.pop(record.id, None)
             return False
         try:
             async with _kiosk_tag_sync_gate():
-                result = await booking.active_once(current.student_id, current.corner_no, current.kiosk_booking_no)
+                result = await booking.pending_state_once(
+                    current.student_id, current.corner_no, current.kiosk_booking_no,
+                )
         except httpx.HTTPError as exc:
+            _pending_missing_checks.pop(current.id, None)
             log.warning("자동 태그 상태 확인 실패 | room=%s error=%s", current.room_no, exc)
             return False
-        if not result.get("active"):
+        state = result.get("state")
+        if state == "missing":
+            misses = _pending_missing_checks.get(current.id, 0) + 1
+            _pending_missing_checks[current.id] = misses
+            if misses < 2:
+                return False
+            cancelled = reservations.transition(current.id, expected_status="pending_tag", status="cancelled")
+            if not cancelled:
+                return False
+            _pending_missing_checks.pop(current.id, None)
+            await collector.clear_reserved(
+                cancelled.corner_no, cancelled.room_no, reservation_id=cancelled.id,
+            )
+            await collector.refresh_corner_now(cancelled.corner_no)
+            log.info("키오스크 현장 취소 확인 완료 | room=%s", cancelled.room_no)
+            return False
+        _pending_missing_checks.pop(current.id, None)
+        if state != "active":
             return False
         active_record = reservations.transition(current.id, expected_status="pending_tag", status="active")
         if not active_record:
@@ -224,9 +246,10 @@ def _require_same_request(record: reservations.Reservation, data: BookingRequest
 
 
 async def sync_pending_tags_once() -> int:
-    """사용자가 앱의 확인 버튼을 누르지 않아도 태그 상태를 동기화한다."""
+    """사용자가 앱을 열지 않아도 태그 완료와 현장 취소를 동기화한다."""
     expired = reservations.expire_pending()
     for record in expired:
+        _pending_missing_checks.pop(record.id, None)
         await collector.clear_reserved(record.corner_no, record.room_no, reservation_id=record.id)
     if expired:
         # 미태그 자동 취소/이용 종료도 수동 취소와 동일하게
@@ -237,8 +260,13 @@ async def sync_pending_tags_once() -> int:
         ))
 
     now = kst_now()
-    pending = [record for record in reservations.open_reservations()
-               if record.status == "pending_tag" and record.start_at <= now <= record.tag_deadline + reservations.PENDING_TAG_GRACE]
+    open_records = reservations.open_reservations()
+    open_ids = {record.id for record in open_records}
+    for old_id in list(_pending_missing_checks):
+        if old_id not in open_ids:
+            _pending_missing_checks.pop(old_id, None)
+    pending = [record for record in open_records
+               if record.status == "pending_tag" and now <= record.tag_deadline + reservations.PENDING_TAG_GRACE]
     results = await asyncio.gather(*(_mark_tagged_active(record) for record in pending))
     return sum(results)
 
@@ -426,10 +454,16 @@ async def health():
 async def status(
     floor: int = Query(None, description="층 필터 (1~4). 생략 시 전체"),
     occupied: bool = Query(None, description="true=사용중만, false=공실만"),
+    refresh_corner: int = Query(None, description="해당 구역만 학교에서 즉시 다시 조회"),
 ):
     state = collector.get_state()
     if state is None:
         raise HTTPException(503, "데이터 준비 중입니다. 잠시 후 다시 시도하세요.")
+    if refresh_corner is not None:
+        if refresh_corner not in booking.CORNER_NAMES:
+            raise HTTPException(422, "지원하지 않는 구역입니다.")
+        await collector.refresh_corner_now(refresh_corner)
+        state = collector.get_state() or state
 
     rooms = state.rooms
     if floor is not None:

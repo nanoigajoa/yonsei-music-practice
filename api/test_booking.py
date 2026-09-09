@@ -224,6 +224,41 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["active"])
         self.assertEqual(result["booking_no"], "777")
 
+    async def test_pending_state_distinguishes_active_pending_missing_and_unknown(self):
+        cases = [
+            ("777", "<table></table>", "active"),
+            ("", receipt(), "pending_tag"),
+            ("", "<table><tr><td>예약 내역이 없습니다.</td></tr></table>", "missing"),
+            ("888", "<table></table>", "unknown"),
+            (None, "unexpected response", "unknown"),
+        ]
+        for active_number, info_html, expected in cases:
+            with self.subTest(expected=expected, active_number=active_number):
+                client = AsyncMock()
+                client.get.return_value = Response(info_html)
+                context = AsyncMock()
+                context.__aenter__.return_value = client
+                context.__aexit__.return_value = False
+                with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(
+                    booking, "_login", AsyncMock(return_value=Response(LOGIN_HTML))
+                ), patch.object(
+                    booking, "_active_booking_no", AsyncMock(return_value=active_number)
+                ):
+                    result = await booking.pending_state_once("2022172528", 1, "777")
+                self.assertEqual(result["state"], expected)
+
+    async def test_pending_state_requires_confirmed_login_before_missing(self):
+        client = AsyncMock()
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        context.__aexit__.return_value = False
+        with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(
+            booking, "_login", AsyncMock(return_value=Response("로그인 실패"))
+        ), patch.object(booking, "_active_booking_no", AsyncMock()) as active:
+            result = await booking.pending_state_once("2022172528", 1, "777")
+        self.assertEqual(result["state"], "unknown")
+        active.assert_not_awaited()
+
     async def test_cancel_failure_text_is_not_success(self):
         for text, success in (("예약 취소 실패", False), ("취소 버튼", False), ("예약 취소되었습니다.", True)):
             client = AsyncMock()

@@ -391,6 +391,41 @@ async def active_once(student_id: str, corner_no: int, booking_no: str | None = 
         return await _active_once(client, corner_no, booking_no)
 
 
+async def pending_state_once(student_id: str, corner_no: int, booking_no: str | None) -> dict:
+    """인증대기 예약이 학교에서 활성·대기·취소 중 어느 상태인지 한 번 읽는다."""
+    if not booking_no:
+        return {"state": "unknown"}
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        login = await _login(client, student_id, corner_no)
+        login.raise_for_status()
+        if "window.opener.location" not in login.text or "/booking/index.php" not in login.text:
+            return {"state": "unknown"}
+
+        active_number = await _active_booking_no(client, corner_no)
+        if active_number == booking_no:
+            return {"state": "active", "booking_no": booking_no}
+        if active_number not in {None, ""}:
+            return {"state": "unknown"}
+
+        page = await client.get(
+            f"{BASE}/booking/booking_info.php",
+            params={"corner_no": corner_no},
+            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
+        )
+        page.raise_for_status()
+        if re.search(r"로그인\s*후|login", page.text, re.IGNORECASE):
+            return {"state": "unknown"}
+        pending_numbers = set(re.findall(r"booking_del\(['\"](\d+)", page.text))
+        if booking_no in pending_numbers:
+            return {"state": "pending_tag", "booking_no": booking_no}
+        referenced_numbers = set(re.findall(r"(?:return\.php\?booking_no=|booking_no[\"'=]+)(\d+)", page.text))
+        if booking_no in referenced_numbers:
+            return {"state": "unknown"}
+        if "<table" not in page.text.lower() and "예약" not in page.text:
+            return {"state": "unknown"}
+        return {"state": "missing", "booking_no": booking_no}
+
+
 async def active(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:
     async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
         await _login(client, student_id, corner_no)

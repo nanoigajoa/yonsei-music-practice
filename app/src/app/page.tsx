@@ -8,7 +8,7 @@ import { NotificationBanner } from '@/components/NotificationBanner'
 import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
-import { ActiveBooking, getActiveBooking, getStudentId, saveActiveBooking } from '@/lib/localBooking'
+import { ActiveBooking, clearActiveBooking, getActiveBooking, getStudentId, saveActiveBooking } from '@/lib/localBooking'
 import { isCurrentlyAvailable } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
@@ -216,6 +216,55 @@ export default function HomePage() {
     void recoverCurrentBooking()
   }, [activeBooking, recoverCurrentBooking, status, user])
 
+  const reconcileActiveBooking = useCallback(async () => {
+    if (!activeBooking || !user || !status) return
+    const studentId = getStudentId()
+    if (!studentId) return
+    const snapshot = activeBooking
+    try {
+      const idToken = await user.getIdToken()
+      const response = await fetch(`${BOOKING_API_URL}/booking/current`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ student_id: studentId }),
+        cache: 'no-store',
+      })
+      if (!response.ok) return
+      const data = await response.json()
+      if (!data.found) {
+        clearActiveBooking()
+        setActiveBooking((current) => current?.returnToken === snapshot.returnToken ? null : current)
+        setBookingRoom((current) => current?.corner_no === snapshot.room.corner_no
+          && roomNum(current.name) === roomNum(snapshot.room.name) ? null : current)
+        return
+      }
+      if (data.pending || !data.return_token || !data.reservation) return
+      const room = status.rooms.find((candidate) =>
+        candidate.corner_no === data.corner_no && roomNum(candidate.name) === data.room_no)
+      if (!room) return
+      const step = data.reservation.status === 'active' ? 'active' : 'tag'
+      if (snapshot.step === step
+          && snapshot.startAt === data.reservation.start_at
+          && snapshot.endAt === data.reservation.end_at) return
+      const synced: ActiveBooking = {
+        room,
+        returnToken: data.return_token,
+        step,
+        createdAt: snapshot.createdAt,
+        startAt: data.reservation.start_at,
+        endAt: data.reservation.end_at,
+        tagDeadline: data.reservation.tag_deadline,
+      }
+      saveActiveBooking(synced)
+      setActiveBooking(synced)
+    } catch {}
+  }, [activeBooking, status, user])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void reconcileActiveBooking() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [reconcileActiveBooking, status?.updated_at])
+
   async function openBooking(room: Room) {
     if (activeBooking && (activeBooking.room.name !== room.name || activeBooking.room.corner_no !== room.corner_no)) {
       setBookingRoom(activeBooking.room)
@@ -271,7 +320,7 @@ export default function HomePage() {
           {/* 새로고침 + 연결 배지 */}
           <div className="flex items-center gap-2 mt-1">
             <button
-              onClick={refresh}
+              onClick={() => { void refresh(corners[0]) }}
               disabled={refreshing}
               className="w-7 h-7 rounded-full bg-rb-500 flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50"
               aria-label="새로고침"
@@ -396,7 +445,7 @@ export default function HomePage() {
               <p className="font-bold text-gray-800">현황 서버에 연결할 수 없어요</p>
               <p className="mt-1 text-sm text-gray-600">인터넷 연결을 확인하고 다시 시도해 주세요.</p>
             </div>
-            <button onClick={refresh} disabled={refreshing}
+            <button onClick={() => { void refresh() }} disabled={refreshing}
               className="mt-1 h-11 rounded-xl bg-rb-600 px-5 text-sm font-bold text-white disabled:opacity-50">
               {refreshing ? '다시 연결 중...' : '다시 시도'}
             </button>
@@ -561,7 +610,7 @@ export default function HomePage() {
               ? activeBooking : null
           }
           onClose={() => setBookingRoom(null)}
-          onChanged={refresh}
+          onChanged={() => { void refresh() }}
           onSessionChange={setActiveBooking}
         />
       )}
