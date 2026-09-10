@@ -96,8 +96,45 @@ def _connection():
         conn.execute("ALTER TABLE reservations ADD COLUMN returned_at TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS reservations_uid_created ON reservations(uid, created_at DESC, id DESC)")
     open_filter = "status IN ('creating','submitting','uncertain','pending_tag','active')"
-    for name, fields in (("uid", "uid"), ("student", "student_key"), ("room", "corner_no, room_no")):
+    for name, fields in (("uid", "uid"), ("student", "student_key")):
         conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS reservations_open_{name} ON reservations({fields}) WHERE {open_filter}")
+    # 학교는 현재 이용이 끝나기 직전에 다음 이용자의 비중복 예약을 허용한다.
+    # 기존 방별 UNIQUE 인덱스만 같은 이름의 일반 조회 인덱스로 바꾼다. 이름을
+    # 유지하면 이전 배포 버전으로 되돌려도 UNIQUE 재생성 때문에 기동이 깨지지
+    # 않고, 겹침 방지는 아래 트리거와 acquire()의 시간대 검사가 맡는다.
+    room_index = next((row for row in conn.execute("PRAGMA index_list(reservations)")
+                       if row["name"] == "reservations_open_room"), None)
+    if room_index is not None and room_index["unique"]:
+        conn.execute("DROP INDEX reservations_open_room")
+    conn.execute(f"CREATE INDEX IF NOT EXISTS reservations_open_room ON reservations(corner_no, room_no) WHERE {open_filter}")
+    # 앱 검사를 우회하는 쓰기나 다중 프로세스 경합에서도 겹치는 열린 예약은
+    # DB가 마지막으로 차단한다. 종료와 다음 시작이 같은 인접 구간은 허용한다.
+    conn.execute("""CREATE TRIGGER IF NOT EXISTS reservations_open_room_insert
+                    BEFORE INSERT ON reservations
+                    WHEN NEW.status IN ('creating','submitting','uncertain','pending_tag','active')
+                    BEGIN
+                      SELECT RAISE(ABORT, 'open room time overlap')
+                      WHERE EXISTS (
+                        SELECT 1 FROM reservations
+                        WHERE corner_no=NEW.corner_no AND room_no=NEW.room_no
+                          AND status IN ('creating','submitting','uncertain','pending_tag','active')
+                          AND (NEW.end_at <= NEW.start_at OR end_at <= start_at
+                               OR (NEW.start_at < end_at AND NEW.end_at > start_at))
+                      );
+                    END""")
+    conn.execute("""CREATE TRIGGER IF NOT EXISTS reservations_open_room_update
+                    BEFORE UPDATE OF corner_no, room_no, start_at, end_at, status ON reservations
+                    WHEN NEW.status IN ('creating','submitting','uncertain','pending_tag','active')
+                    BEGIN
+                      SELECT RAISE(ABORT, 'open room time overlap')
+                      WHERE EXISTS (
+                        SELECT 1 FROM reservations
+                        WHERE id<>NEW.id AND corner_no=NEW.corner_no AND room_no=NEW.room_no
+                          AND status IN ('creating','submitting','uncertain','pending_tag','active')
+                          AND (NEW.end_at <= NEW.start_at OR end_at <= start_at
+                               OR (NEW.start_at < end_at AND NEW.end_at > start_at))
+                      );
+                    END""")
     conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS reservations_uid_request_id_unique
                     ON reservations(uid, request_id) WHERE request_id IS NOT NULL""")
     # 학번 원문은 저장하지 않는다. BOOKING_TOKEN_SECRET로 만든 HMAC만 보관해
@@ -294,9 +331,17 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
         if student_open:
             conn.execute("ROLLBACK")
             raise ReservationConflict("이미 예약 또는 사용 중인 연습실이 있습니다. 기존 예약을 취소하거나 반납해 주세요.")
+        # 학교가 지금 받는 예약은 항상 다음 10분 경계에 시작한다. 현재 이용의
+        # 종료가 그 경계와 같으면 시간대가 겹치지 않으므로 다음 사람의 선점을
+        # 허용한다.
+        next_start = now.replace(second=0, microsecond=0) + timedelta(minutes=10 - now.minute % 10)
+        next_end = next_start + timedelta(minutes=duration_min)
         room_open = conn.execute(
-            f"SELECT * FROM reservations WHERE corner_no=? AND room_no=? AND status IN ({placeholders}) LIMIT 1",
-            (corner_no, room_no, *OPEN_STATUSES),
+            f"""SELECT * FROM reservations
+                WHERE corner_no=? AND room_no=? AND status IN ({placeholders})
+                  AND (end_at <= start_at OR (start_at < ? AND end_at > ?))
+                LIMIT 1""",
+            (corner_no, room_no, *OPEN_STATUSES, next_end.isoformat(), next_start.isoformat()),
         ).fetchone()
         if room_open:
             conn.execute("ROLLBACK")
@@ -306,12 +351,18 @@ def acquire(*, id: str, uid: str, student_id: str, student_key: str, corner_no: 
                 (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at, tag_deadline, status, kiosk_booking_no, request_id, created_at, duration_min, dispatch_started, booking_source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'creating', NULL, ?, ?, ?, 0, ?)""", (
                     id, uid, student_id, student_key, corner_no, room_no,
-                    now.isoformat(), now.isoformat(), now.isoformat(), request_id, now.isoformat(), duration_min, booking_source,
+                    next_start.isoformat(), next_end.isoformat(),
+                    (next_start + timedelta(minutes=10)).isoformat(),
+                    request_id, now.isoformat(), duration_min, booking_source,
                 ))
         except sqlite3.IntegrityError as exc:
             raise ReservationConflict("이미 처리된 예약 요청입니다. 기존 요청의 결과를 확인해 주세요.") from exc
         conn.execute("COMMIT")
-    return Reservation(id, uid, student_id, student_key, corner_no, room_no, now, now, now, "creating", request_id=request_id, duration_min=duration_min, dispatch_started=False)
+    return Reservation(
+        id, uid, student_id, student_key, corner_no, room_no,
+        next_start, next_end, next_start + timedelta(minutes=10), "creating",
+        request_id=request_id, duration_min=duration_min, dispatch_started=False,
+    )
 
 
 def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no: str | None,

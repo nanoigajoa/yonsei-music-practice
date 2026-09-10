@@ -21,6 +21,16 @@ OCCUPIED_HTML = """
   <div class="reserve"><a onclick="go('4','38','1','2','15','16')">예약</a></div>
 </div>
 """
+HANDOVER_HTML = """
+<div class="Body-List">
+  <div class="title"><table><tr><td></td><td>연습실(411호)</td></tr></table></div>
+  <div class="contents"><ul>
+    <li title="현재 예약된 시간"><img id="time_cell_5_0" src="/images/time_blue.gif"></li>
+    <li><a>예약</a><img id="time_cell_5_1" src="/images/time_gray.gif"></li>
+  </ul></div>
+  <div class="reserve"><a onclick="go('4','38','1','2','19','00')">예약</a></div>
+</div>
+"""
 FORM_HTML = """
 <select name="begin_hour"><option value="21">21</option></select>
 <select name="begin_min"><option value="50">50</option></select>
@@ -82,6 +92,31 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
     def test_current_occupied_slot_is_detected(self):
         soup = BeautifulSoup(OCCUPIED_HTML, "html.parser")
         self.assertEqual(booking._current_room_status(soup.select_one("div.Body-List")), "occupied")
+
+    def test_only_immediately_available_next_slot_is_handover(self):
+        handover = BeautifulSoup(HANDOVER_HTML, "html.parser").select_one("div.Body-List")
+        occupied = BeautifulSoup(OCCUPIED_HTML, "html.parser").select_one("div.Body-List")
+        self.assertTrue(booking._next_room_slot_available(handover))
+        self.assertFalse(booking._next_room_slot_available(occupied))
+
+    async def test_reserve_accepts_kiosk_handover_link_while_current_slot_is_occupied(self):
+        client = AsyncMock()
+        client.get.side_effect = [
+            Response("<html></html>"),
+            Response(HANDOVER_HTML),
+            Response(FORM_HTML),
+            Response(receipt("19:10", "19:40", room="411")),
+        ]
+        client.post.side_effect = [Response(LOGIN_HTML), Response("예약 완료")]
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        context.__aexit__.return_value = False
+
+        with patch.object(booking.httpx, "AsyncClient", return_value=context):
+            result = await booking.reserve("2022172528", 4, "411", 30)
+
+        self.assertTrue(result["success"])
+        self.assertEqual(client.post.await_count, 2)
 
     async def test_student_validation_requires_kiosk_login_success_marker(self):
         client = AsyncMock()

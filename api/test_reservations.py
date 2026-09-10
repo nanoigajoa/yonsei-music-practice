@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import reservations
 import clock
@@ -58,6 +59,49 @@ class ReservationStateTest(unittest.TestCase):
         reservations.acquire(id="one", uid="u1", student_id="2022172528", student_key="student-a", corner_no=1, room_no="119")
         with self.assertRaises(reservations.ReservationConflict):
             reservations.acquire(id="two", uid="u2", student_id="2023172529", student_key="student-b", corner_no=1, room_no="119")
+
+    def test_next_user_can_reserve_when_active_room_ends_at_next_slot(self):
+        start = datetime(2026, 9, 10, 12, 30, tzinfo=clock.KST)
+        with patch.object(reservations, "kst_now", return_value=start - timedelta(minutes=1)):
+            reservations.acquire(id="one", uid="u1", student_id="2022172528", student_key="student-a", corner_no=8, room_no="313")
+        reservations.finalize("one", start_at=start, duration_min=120, kiosk_booking_no="old")
+        reservations.set_status("one", "active")
+
+        with patch.object(reservations, "kst_now", return_value=datetime(2026, 9, 10, 14, 20, 59, tzinfo=clock.KST)):
+            replacement = reservations.acquire(
+                id="two", uid="u2", student_id="2023172529", student_key="student-b",
+                corner_no=8, room_no="313",
+            )
+
+        self.assertEqual(replacement.status, "creating")
+
+    def test_next_user_stays_blocked_when_active_room_overlaps_next_slot(self):
+        start = datetime(2026, 9, 10, 12, 40, tzinfo=clock.KST)
+        with patch.object(reservations, "kst_now", return_value=start - timedelta(minutes=1)):
+            reservations.acquire(id="one", uid="u1", student_id="2022172528", student_key="student-a", corner_no=8, room_no="313")
+        reservations.finalize("one", start_at=start, duration_min=120, kiosk_booking_no="old")
+        reservations.set_status("one", "active")
+
+        with patch.object(reservations, "kst_now", return_value=datetime(2026, 9, 10, 14, 20, 59, tzinfo=clock.KST)):
+            with self.assertRaises(reservations.ReservationConflict):
+                reservations.acquire(
+                    id="two", uid="u2", student_id="2023172529", student_key="student-b",
+                    corner_no=8, room_no="313",
+                )
+
+    def test_legacy_unplanned_open_row_still_blocks_the_room(self):
+        first = reservations.acquire(
+            id="one", uid="u1", student_id="2022172528", student_key="student-a",
+            corner_no=8, room_no="313",
+        )
+        with reservations._connection() as conn:
+            conn.execute("UPDATE reservations SET end_at=start_at WHERE id=?", (first.id,))
+
+        with self.assertRaises(reservations.ReservationConflict):
+            reservations.acquire(
+                id="two", uid="u2", student_id="2023172529", student_key="student-b",
+                corner_no=8, room_no="313",
+            )
 
     def test_student_binding_is_immutable_and_unique(self):
         self.assertTrue(reservations.bind_student("google-a", "student-a"))

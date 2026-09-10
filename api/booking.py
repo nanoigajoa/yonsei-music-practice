@@ -115,6 +115,28 @@ def _current_room_status(seat) -> str:
     return "unknown"
 
 
+def _next_room_slot_available(seat) -> bool:
+    """현재 칸 바로 다음 칸이 키오스크에서 예약 가능한지 확인한다."""
+    current_seen = False
+    for img in seat.select("img"):
+        if not img.get("id", "").startswith("time_cell_"):
+            continue
+        li = img.find_parent("li")
+        if li is None or "지난 시간" in li.get("title", ""):
+            continue
+        if not current_seen:
+            current_seen = True
+            continue
+        src = img.get("src", "")
+        title = li.get("title", "")
+        return (
+            "time_green" in src
+            or "time_gray" in src
+            or (li.find("a") is not None and "예약불가" not in title)
+        )
+    return False
+
+
 def _next_ten_minute(hour: str, minute: str) -> tuple[str, str]:
     """키오스크 목록의 현재 시각을 다음 예약 시작 시각으로 정규화한다.
 
@@ -233,13 +255,18 @@ async def reserve(student_id: str, corner_no: int, room_no: str, limit_time: int
                 title_room = re.search(r"(\d+)호", title.get_text(" ", strip=True) if title else "")
                 if not title_room or title_room.group(1) != room_no:
                     continue
-                if _current_room_status(seat) == "occupied":
-                    blocked_message = f"실시간 확인 결과: {room_no}호는 현재 사용중입니다."
-                    break
+                current_status = _current_room_status(seat)
                 link = seat.select_one("div.reserve a[onclick]")
                 values = re.findall(r"'([^']+)'", link.get("onclick", "")) if link else []
-                if len(values) >= 6:
+                # 종료 직전에는 현재 칸이 아직 파란색이어도 다음 칸과 키오스크
+                # 예약 링크가 함께 열린다. 이 경우만 학교와 동일하게 다음 시작
+                # 시각 예약을 허용하고, 그 외 사용 중 상태는 계속 차단한다.
+                if len(values) >= 6 and (current_status != "occupied" or _next_room_slot_available(seat)):
                     params = values[:6]
+                    break
+                if current_status == "occupied":
+                    blocked_message = f"실시간 확인 결과: {room_no}호는 현재 사용중입니다."
+                    break
                 break
             if params or blocked_message:
                 break
