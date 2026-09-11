@@ -474,18 +474,8 @@ async def active(student_id: str, corner_no: int, booking_no: str | None = None)
     }
 
 
-async def active_details(student_id: str, corner_no: int) -> dict:
-    """키오스크에서 직접 태그해 사용 중인 단 하나의 예약을 읽는다."""
-    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
-        await _login(client, student_id, corner_no)
-        number = await _active_booking_no(client, corner_no)
-        if not number:
-            return {"success": False, "message": "키오스크에서 사용 중인 예약을 찾지 못했습니다."}
-        info = await client.get(
-            f"{BASE}/booking/booking_info.php", params={"corner_no": corner_no},
-            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
-        )
-    soup = BeautifulSoup(info.text, "html.parser")
+def _active_details(html: str, booking_no: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
     active_rows = [row.get_text(" ", strip=True) for row in soup.select("tr")
                    if "이용중" in row.get_text() or "사용중" in row.get_text()]
     if len(active_rows) != 1:
@@ -502,9 +492,83 @@ async def active_details(student_id: str, corner_no: int) -> dict:
     end_at = now.replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
     if end_at <= start_at:
         end_at += timedelta(days=1)
-    return {"success": True, "booking_no": number, "room_no": room_match.group(1),
+    return {"success": True, "booking_no": booking_no, "room_no": room_match.group(1),
             "start_at": start_at.isoformat(), "end_at": end_at.isoformat(),
             "message": f"키오스크 {room_match.group(1)}호 사용 중 예약을 불러왔습니다."}
+
+
+async def active_details(student_id: str, corner_no: int) -> dict:
+    """키오스크에서 직접 태그해 사용 중인 단 하나의 예약을 읽는다."""
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        await _login(client, student_id, corner_no)
+        number = await _active_booking_no(client, corner_no)
+        if not number:
+            return {"success": False, "message": "키오스크에서 사용 중인 예약을 찾지 못했습니다."}
+        info = await client.get(
+            f"{BASE}/booking/booking_info.php", params={"corner_no": corner_no},
+            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
+        )
+        info.raise_for_status()
+    return _active_details(info.text, number)
+
+
+def _pending_details(html: str) -> dict | None:
+    """예약현황에서 취소되지 않은 인증대기 예약 한 건만 읽는다."""
+    matches = []
+    current = kst_now()
+    for row in BeautifulSoup(html, "html.parser").select("tr"):
+        if row.find("tr") is not None:
+            continue
+        text = row.get_text(" ", strip=True)
+        cancel_ids = re.findall(r"booking_del\(['\"](\d+)", str(row))
+        rooms = re.findall(r"(?<!\d)(\d{3})호", text)
+        times = re.search(r"(\d{1,2}:\d{2})(?::\d{2})?\s*~\s*(\d{1,2}:\d{2})(?::\d{2})?", text)
+        dates = re.findall(r"\d{4}-\d{2}-\d{2}", text)
+        if len(cancel_ids) != 1 or len(rooms) != 1 or not times or len(dates) > 1:
+            continue
+        date_label = dates[0] if dates else current.date().isoformat()
+        try:
+            start_at = datetime.fromisoformat(f"{date_label}T{times.group(1).zfill(5)}").replace(
+                tzinfo=current.tzinfo
+            )
+            end_at = datetime.fromisoformat(f"{date_label}T{times.group(2).zfill(5)}").replace(
+                tzinfo=current.tzinfo
+            )
+        except ValueError:
+            continue
+        if end_at <= start_at:
+            end_at += timedelta(days=1)
+        matches.append({
+            "success": True,
+            "booking_no": cancel_ids[0],
+            "room_no": rooms[0],
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+            "status": "pending_tag",
+            "message": f"키오스크 {rooms[0]}호 인증대기 예약을 불러왔습니다.",
+        })
+    return matches[0] if len(matches) == 1 else None
+
+
+async def current_details(student_id: str, corner_no: int) -> dict:
+    """키오스크의 현재 인증대기 또는 이용중 예약 한 건을 읽는다."""
+    async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT) as client:
+        login = await _login(client, student_id, corner_no)
+        login.raise_for_status()
+        if "window.opener.location" not in login.text or "/booking/index.php" not in login.text:
+            return {"success": False, "message": "키오스크 로그인을 확인하지 못했습니다."}
+        active_number = await _active_booking_no(client, corner_no)
+        page = await client.get(
+            f"{BASE}/booking/booking_info.php", params={"corner_no": corner_no},
+            headers={**HEADERS, "Referer": f"{BASE}/booking/index.php"},
+        )
+        page.raise_for_status()
+    if active_number:
+        return {**_active_details(page.text, active_number), "status": "active"}
+    pending = _pending_details(page.text)
+    if pending:
+        return pending
+    return {"success": False, "message": "키오스크에서 현재 예약 또는 사용 중인 내역을 찾지 못했습니다."}
 
 
 async def return_room(student_id: str, corner_no: int, booking_no: str | None = None) -> dict:

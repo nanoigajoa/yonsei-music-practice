@@ -168,17 +168,17 @@ async def _mark_tagged_active(record: reservations.Reservation) -> bool:
 
 
 async def _reconcile_kiosk_return(record: reservations.Reservation) -> bool:
-    """방 앞 키오스크에서 먼저 반납한 active 기록만 종료한다.
+    """키오스크에서 사라졌거나 다른 건으로 바뀐 앱의 이전 기록을 종료한다.
 
     로그인이 확인되고, 저장된 예약 번호가 활성·대기 목록 모두에서
     사라진 경우만 missing이다. 다른 활성 예약이 있거나 응답을 판독할 수
     없는 경우에는 기존 차단을 유지한다.
     """
-    if record.status != "active" or not record.kiosk_booking_no:
+    if record.status not in {"pending_tag", "active"} or not record.kiosk_booking_no:
         return False
     async with _reservation_action_gate(record.id):
         current = reservations.get(record.id)
-        if not current or current.status != "active" or not current.kiosk_booking_no:
+        if not current or current.status not in {"pending_tag", "active"} or not current.kiosk_booking_no:
             return False
         try:
             state = await booking.pending_state_once(
@@ -189,14 +189,15 @@ async def _reconcile_kiosk_return(record: reservations.Reservation) -> bool:
             return False
         if state.get("state") not in {"missing", "different_active"}:
             return False
-        returned = reservations.set_status(current.id, "returned")
-        if not returned or returned.status != "returned":
+        closed_status = "returned" if current.status == "active" else "cancelled"
+        closed = reservations.set_status(current.id, closed_status)
+        if not closed or closed.status != closed_status:
             return False
-        if AUTO_RETURN_ENABLED:
-            await auto_return.forget(returned.uid, returned.corner_no, reservation_id=returned.id)
-        await collector.clear_reserved(returned.corner_no, returned.room_no, reservation_id=returned.id)
-        await collector.refresh_corner_now(returned.corner_no)
-        log.info("키오스크 수동 반납 동기화 완료 | room=%s", returned.room_no)
+        if current.status == "active" and AUTO_RETURN_ENABLED:
+            await auto_return.forget(closed.uid, closed.corner_no, reservation_id=closed.id)
+        await collector.clear_reserved(closed.corner_no, closed.room_no, reservation_id=closed.id)
+        await collector.refresh_corner_now(closed.corner_no)
+        log.info("키오스크 이전 예약 동기화 완료 | room=%s status=%s", closed.room_no, closed_status)
         return True
 
 
@@ -724,55 +725,67 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
     # 남은 이전 사용 기록은 아래 재확인에서 반납 완료로 닫아 다음 예약을 막지
     # 않게 하고, 키오스크에 실제로 남은 사용 건만 앱에 연결한다.
     try:
-        result = await booking.active_details(data.student_id, data.corner_no)
+        result = await booking.current_details(data.student_id, data.corner_no)
     except httpx.HTTPError as exc:
         log.warning("키오스크 사용 예약 불러오기 실패: %s", exc)
         raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
 
+    reconciled_existing = False
     existing = reservations.open_for_uid(user["uid"])
     if existing:
         current_matches_existing = (
-            existing.status == "active"
+            existing.status in {"pending_tag", "active"}
             and result.get("success")
             and result.get("booking_no") == existing.kiosk_booking_no
             and result.get("room_no") == existing.room_no
         )
         if current_matches_existing:
-            if result.get("room_no") != data.room_no:
-                return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
+            school_status = result.get("status", "active")
+            if existing.status == "pending_tag" and school_status == "active":
+                existing = reservations.transition(
+                    existing.id, expected_status="pending_tag", status="active"
+                ) or existing
+                await _publish_reservation(existing)
+            elif existing.status != school_status:
+                raise HTTPException(409, "키오스크 예약 상태를 확인 중입니다. 잠시 후 다시 불러와 주세요.")
             restored = {
                 "success": True,
-                "active": True,
+                "active": existing.status == "active",
                 "booking_no": existing.kiosk_booking_no,
                 "room_no": existing.room_no,
                 "start_at": existing.start_at.isoformat(),
                 "end_at": existing.end_at.isoformat(),
-                "message": f"진행 중인 {existing.room_no}호 사용을 불러왔습니다.",
+                "message": (
+                    f"진행 중인 {existing.room_no}호 사용을 불러왔습니다."
+                    if existing.status == "active"
+                    else f"{existing.room_no}호 인증대기 예약을 불러왔습니다."
+                ),
             }
             restored["return_token"] = issue_return_token(
-                user["uid"], data.student_id, data.corner_no, data.room_no, existing.id
+                user["uid"], data.student_id, existing.corner_no, existing.room_no, existing.id
             )
             restored["reservation"] = _reservation_payload(existing)
             return restored
-        if existing.status != "active" or not await _reconcile_kiosk_return(existing):
+        if existing.status not in {"pending_tag", "active"} or not await _reconcile_kiosk_return(existing):
             raise HTTPException(409, "기존 예약 상태를 키오스크와 확인 중입니다. 잠시 후 다시 불러와 주세요.")
+        reconciled_existing = True
         # 재확인 사이에 키오스크 상태가 바뀌었을 수 있으므로, 이전 행을 닫은 뒤
         # 실제로 가져올 현재 사용 건을 한 번 더 읽는다.
         try:
-            result = await booking.active_details(data.student_id, data.corner_no)
+            result = await booking.current_details(data.student_id, data.corner_no)
         except httpx.HTTPError as exc:
             log.warning("키오스크 사용 예약 재조회 실패: %s", exc)
             raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
 
     if not result.get("success"):
-        return result
-    if result.get("room_no") != data.room_no:
-        return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
+        return {**result, "reconciled": reconciled_existing}
+    actual_room_no = str(result["room_no"])
 
     try:
         intent = reservations.acquire(
             id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
-            student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no, booking_source="kiosk",
+            student_key=student_key(data.student_id), corner_no=data.corner_no,
+            room_no=actual_room_no, booking_source="kiosk",
         )
     except reservations.ReservationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -780,13 +793,22 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
         start_at = parse_kst(result["start_at"])
         end_at = parse_kst(result["end_at"])
         duration = max(1, int((end_at - start_at).total_seconds() // 60))
+        status = result.get("status", "active")
         record = reservations.finalize(intent.id, start_at=start_at, duration_min=duration,
-                                       kiosk_booking_no=result["booking_no"])
-        record = reservations.set_status(record.id, "active") or record
-        result["return_token"] = issue_return_token(user["uid"], data.student_id, data.corner_no, data.room_no, record.id)
+                                       kiosk_booking_no=result["booking_no"], status=status)
+        result["return_token"] = issue_return_token(
+            user["uid"], data.student_id, record.corner_no, record.room_no, record.id
+        )
         result["reservation"] = _reservation_payload(record)
-        await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
-                                    end_at=record.end_at, reservation_id=record.id)
+        if record.status == "active":
+            await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
+                                        end_at=record.end_at, reservation_id=record.id)
+        else:
+            await collector.mark_reserved(
+                record.corner_no, record.room_no, start_at=record.start_at,
+                end_at=record.end_at, tag_deadline=record.tag_deadline,
+                status="pending_tag", reservation_id=record.id,
+            )
         return result
     except (KeyError, ValueError) as exc:
         reservations.fail(intent.id)

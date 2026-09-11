@@ -604,6 +604,7 @@ export default function HomePage() {
       {bookingRoom && (
         <BookingSheet
           room={bookingRoom}
+          rooms={status?.rooms ?? []}
           resumedBooking={
             activeBooking?.room.name === bookingRoom.name
             && activeBooking.room.corner_no === bookingRoom.corner_no

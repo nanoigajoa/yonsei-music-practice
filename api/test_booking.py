@@ -291,8 +291,23 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             booking, "_login", AsyncMock(return_value=Response("로그인 실패"))
         ), patch.object(booking, "_active_booking_no", AsyncMock()) as active:
             result = await booking.pending_state_once("2022172528", 1, "777")
-        self.assertEqual(result["state"], "unknown")
-        active.assert_not_awaited()
+            self.assertEqual(result["state"], "unknown")
+            active.assert_not_awaited()
+
+    def test_pending_details_uses_only_cancellable_current_reservation(self):
+        html = (
+            receipt(start="15:00", end="16:59", room="122", number="944200")
+            + "<table><tr><td>2026-09-07 119호 10:40~10:54 이용자취소</td></tr></table>"
+        )
+        result = booking._pending_details(html)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["status"], "pending_tag")
+        self.assertEqual(result["booking_no"], "944200")
+        self.assertEqual(result["room_no"], "122")
+
+    def test_pending_details_ignores_cancelled_history(self):
+        html = "<table><tr><td>2026-09-07 122호 15:00~16:59 이용자취소</td></tr></table>"
+        self.assertIsNone(booking._pending_details(html))
 
     async def test_cancel_failure_text_is_not_success(self):
         for text, success in (("예약 취소 실패", False), ("취소 버튼", False), ("예약 취소되었습니다.", True)):

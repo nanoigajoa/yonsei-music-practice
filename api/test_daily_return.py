@@ -165,7 +165,7 @@ class DailyReturnTest(unittest.IsolatedAsyncioTestCase):
         student = "2026000001"
         r.bind_student("import-user", student_key(student))
         request = main.KioskImportRequest(student_id=student, corner_no=1, room_no="119")
-        with patch.object(main.booking, "active_details", AsyncMock(return_value={
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
             "success": True, "room_no": "119", "booking_no": "kiosk-only",
             "start_at": (self.now-timedelta(minutes=20)).isoformat(),
             "end_at": (self.now+timedelta(minutes=100)).isoformat(),

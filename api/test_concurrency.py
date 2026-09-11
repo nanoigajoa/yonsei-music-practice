@@ -401,7 +401,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.finalize("active-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking")
         reservations.set_status("active-one", "active")
 
-        with patch.object(main.booking, "active_details", AsyncMock(return_value={
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
             "success": True,
             "booking_no": "old-booking",
             "room_no": "119",
@@ -431,7 +431,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         no_active = {"success": False, "message": "키오스크에서 사용 중인 예약을 찾지 못했습니다."}
 
         with patch.object(
-            main.booking, "active_details", AsyncMock(side_effect=[no_active, no_active])
+            main.booking, "current_details", AsyncMock(side_effect=[no_active, no_active])
         ) as active_details, patch.object(
             main.booking, "pending_state_once", AsyncMock(return_value={"state": "missing"})
         ) as pending_state, patch.object(
@@ -445,6 +445,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertFalse(result["success"])
+        self.assertTrue(result["reconciled"])
         self.assertEqual(reservations.get("stale-active").status, "returned")
         self.assertIsNone(reservations.open_for_uid("user"))
         self.assertEqual(active_details.await_count, 2)
@@ -473,7 +474,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch.object(
-            main.booking, "active_details", AsyncMock(side_effect=[current, current])
+            main.booking, "current_details", AsyncMock(side_effect=[current, current])
         ), patch.object(
             main.booking, "pending_state_once",
             AsyncMock(return_value={"state": "different_active", "booking_no": "new-booking"}),
@@ -485,7 +486,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             main.collector, "mark_active", AsyncMock()
         ) as mark_active:
             result = await main.import_active_booking(
-                main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="313"),
+                main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="119"),
                 user={"uid": "user"},
             )
 
@@ -498,6 +499,40 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(current_record.kiosk_booking_no, "new-booking")
         pending_state.assert_awaited_once_with("2022172528", 1, "old-booking")
         mark_active.assert_awaited_once()
+
+    async def test_import_adds_kiosk_pending_reservation_before_tag(self):
+        start = (datetime.now() + timedelta(minutes=20)).replace(second=0, microsecond=0)
+        reservations.bind_student("user", student_key("2022172528"))
+        pending = {
+            "success": True,
+            "booking_no": "pending-booking",
+            "room_no": "122",
+            "start_at": start.isoformat(),
+            "end_at": (start + timedelta(minutes=119)).isoformat(),
+            "status": "pending_tag",
+            "message": "키오스크 122호 인증대기 예약을 불러왔습니다.",
+        }
+
+        with patch.object(
+            main.booking, "current_details", AsyncMock(return_value=pending)
+        ), patch.object(
+            main.collector, "mark_reserved", AsyncMock()
+        ) as mark_reserved, patch.object(
+            main.collector, "mark_active", AsyncMock()
+        ) as mark_active:
+            result = await main.import_active_booking(
+                main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="119"),
+                user={"uid": "user"},
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["reservation"]["status"], "pending_tag")
+        record = reservations.open_for_uid("user")
+        self.assertIsNotNone(record)
+        self.assertEqual(record.room_no, "122")
+        self.assertEqual(record.kiosk_booking_no, "pending-booking")
+        mark_reserved.assert_awaited_once()
+        mark_active.assert_not_awaited()
 
     async def test_tag_check_before_reservation_start_does_not_query_kiosk(self):
         start = (datetime.now() + timedelta(minutes=5)).replace(second=0, microsecond=0)

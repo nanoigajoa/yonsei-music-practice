@@ -38,8 +38,9 @@ function availableDurations(room: Room) {
   return [30, 60, 90, 120]
 }
 
-export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessionChange }: {
+export function BookingSheet({ room, rooms, resumedBooking, onClose, onChanged, onSessionChange }: {
   room: Room
+  rooms: Room[]
   resumedBooking?: ActiveBooking | null
   onClose: () => void
   onChanged: () => void
@@ -192,16 +193,35 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
       student_id: studentId, corner_no: room.corner_no, room_no: number,
     }, 'import')
     if (data?.success && data.return_token) {
+      const importedStep = data.reservation?.status === 'pending_tag' ? 'tag' as const : 'active' as const
+      const importedNumber = String(data.room_no ?? '')
+      const importedRoom = rooms.find((candidate) =>
+        candidate.corner_no === room.corner_no && roomNumber(candidate) === importedNumber
+      ) ?? (importedNumber && importedNumber !== number ? {
+        ...room,
+        name: importedNumber + '호',
+        floor: Number(importedNumber.charAt(0)) || room.floor,
+        occupied: true,
+        occupied_until: null,
+        available_periods: [],
+      } : room)
       const active = {
-        room, returnToken: data.return_token, step: 'active' as const, createdAt: Date.now(),
+        room: importedRoom, returnToken: data.return_token, step: importedStep, createdAt: Date.now(),
         startAt: data.reservation?.start_at, endAt: data.reservation?.end_at,
+        tagDeadline: data.reservation?.tag_deadline,
       }
       setReturnToken(data.return_token)
-      setStep('active')
+      setStep(importedStep)
       saveActiveBooking(active)
       onSessionChange(active)
       onChanged()
       trackBookingEvent('kiosk_booking_imported')
+    } else if (data?.reconciled) {
+      clearActiveBooking()
+      setReturnToken('')
+      setStep('returned')
+      onSessionChange(null)
+      onChanged()
     }
   }
 
@@ -301,6 +321,10 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
               {loadingAction === 'cancel' ? '취소 중...' : '예약 취소'}
             </button>
           </div>
+          <button onClick={importKioskBooking} disabled={loading}
+            className="mt-2 h-11 w-full rounded-xl border border-blue-200 bg-blue-50 text-sm font-bold text-blue-700 disabled:opacity-50">
+            {loadingAction === 'import' ? '키오스크 상태 확인 중...' : '키오스크 상태 동기화'}
+          </button>
         </div>}
 
         {step === 'active' && <div className="mt-5">
@@ -311,6 +335,10 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
           <button onClick={returnRoom} disabled={loading}
             className="mt-4 h-14 w-full rounded-2xl bg-red-500 font-bold text-white disabled:opacity-50">
             {loadingAction === 'return' ? '반납 중...' : '연습실 반납하기'}
+          </button>
+          <button onClick={importKioskBooking} disabled={loading}
+            className="mt-2 h-11 w-full rounded-xl border border-blue-200 bg-blue-50 text-sm font-bold text-blue-700 disabled:opacity-50">
+            {loadingAction === 'import' ? '키오스크 상태 확인 중...' : '키오스크 상태 동기화'}
           </button>
         </div>}
 
