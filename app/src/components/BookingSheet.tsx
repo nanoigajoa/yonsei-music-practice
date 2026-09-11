@@ -38,8 +38,9 @@ function availableDurations(room: Room) {
   return [30, 60, 90, 120]
 }
 
-export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessionChange }: {
+export function BookingSheet({ room, rooms, resumedBooking, onClose, onChanged, onSessionChange }: {
   room: Room
+  rooms: Room[]
   resumedBooking?: ActiveBooking | null
   onClose: () => void
   onChanged: () => void
@@ -193,16 +194,31 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
       student_id: studentId, corner_no: room.corner_no, room_no: number,
     }, 'import')
     if (data?.success && data.return_token) {
+      const importedRoom = rooms.find(candidate => candidate.corner_no === room.corner_no
+        && roomNumber(candidate) === String(data.room_no))
+      if (!importedRoom) {
+        setError(true)
+        setMessage('예약된 방 정보를 갱신한 뒤 다시 불러와 주세요.')
+        onChanged()
+        return
+      }
+      const importedStep = data.reservation?.status === 'pending_tag' ? 'tag' as const : 'active' as const
       const active = {
-        room, returnToken: data.return_token, reservationId: data.reservation?.id, step: 'active' as const, createdAt: Date.now(),
+        room: importedRoom, returnToken: data.return_token, reservationId: data.reservation?.id, step: importedStep, createdAt: Date.now(),
         startAt: data.reservation?.start_at, endAt: data.reservation?.end_at,
+        tagDeadline: data.reservation?.tag_deadline,
       }
       setReturnToken(data.return_token)
-      setStep('active')
+      setStep(importedStep)
       saveActiveBooking(active)
       onSessionChange(active)
       onChanged()
       trackBookingEvent('kiosk_booking_imported')
+    } else if (data?.reconciled) {
+      if (clearActiveBooking(returnToken)) onSessionChange(null)
+      setReturnToken('')
+      setStep('returned')
+      onChanged()
     }
   }
 
@@ -311,6 +327,11 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
             {loadingAction === 'return' ? '반납 중...' : '연습실 반납하기'}
           </button>
         </div>}
+
+        {(step === 'tag' || step === 'active') && <button onClick={importKioskBooking} disabled={loading}
+          className="mt-2 h-11 w-full rounded-xl border border-blue-200 bg-blue-50 text-sm font-bold text-blue-700 disabled:opacity-50">
+          {loadingAction === 'import' ? '키오스크 상태 확인 중...' : '키오스크 상태 동기화'}
+        </button>}
 
         {step === 'returned' && <div className="mt-5 text-center">
           <p className="text-4xl">✅</p><p className="mt-2 text-lg font-bold">처리 완료</p>

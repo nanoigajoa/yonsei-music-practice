@@ -518,7 +518,9 @@ export default function HomePage() {
 
       {bookingRoom && (
         <BookingSheet
+          key={bookingRoom.corner_no + ':' + roomNum(bookingRoom.name)}
           room={bookingRoom}
+          rooms={status?.rooms ?? []}
           resumedBooking={
             activeBooking?.room.name === bookingRoom.name
             && activeBooking.room.corner_no === bookingRoom.corner_no
@@ -526,7 +528,10 @@ export default function HomePage() {
           }
           onClose={() => setBookingRoom(null)}
           onChanged={refresh}
-          onSessionChange={() => setActiveBooking(getActiveBooking())}
+          onSessionChange={(booking) => {
+            setActiveBooking(getActiveBooking())
+            if (booking) setBookingRoom(booking.room)
+          }}
         />
       )}
 
