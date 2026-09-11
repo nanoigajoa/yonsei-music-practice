@@ -167,6 +167,39 @@ async def _mark_tagged_active(record: reservations.Reservation) -> bool:
         return True
 
 
+async def _reconcile_kiosk_return(record: reservations.Reservation) -> bool:
+    """방 앞 키오스크에서 먼저 반납한 active 기록만 종료한다.
+
+    로그인이 확인되고, 저장된 예약 번호가 활성·대기 목록 모두에서
+    사라진 경우만 missing이다. 다른 활성 예약이 있거나 응답을 판독할 수
+    없는 경우에는 기존 차단을 유지한다.
+    """
+    if record.status != "active" or not record.kiosk_booking_no:
+        return False
+    async with _reservation_action_gate(record.id):
+        current = reservations.get(record.id)
+        if not current or current.status != "active" or not current.kiosk_booking_no:
+            return False
+        try:
+            state = await booking.pending_state_once(
+                current.student_id, current.corner_no, current.kiosk_booking_no,
+            )
+        except httpx.HTTPError as exc:
+            log.warning("키오스크 수동 반납 확인 실패 | room=%s error=%s", current.room_no, exc)
+            return False
+        if state.get("state") != "missing":
+            return False
+        returned = reservations.set_status(current.id, "returned")
+        if not returned or returned.status != "returned":
+            return False
+        if AUTO_RETURN_ENABLED:
+            await auto_return.forget(returned.uid, returned.corner_no, reservation_id=returned.id)
+        await collector.clear_reserved(returned.corner_no, returned.room_no, reservation_id=returned.id)
+        await collector.refresh_corner_now(returned.corner_no)
+        log.info("키오스크 수동 반납 동기화 완료 | room=%s", returned.room_no)
+        return True
+
+
 async def _publish_reservation(record: reservations.Reservation) -> None:
     if record.status == "active":
         await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
@@ -538,6 +571,9 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
             if existing:
                 _require_same_request(existing, data)
                 return _result_for_existing_request(existing, user, data.student_id)
+        open_record = reservations.open_for_uid(user["uid"])
+        if open_record and open_record.status == "active":
+            await _reconcile_kiosk_return(open_record)
         try:
             intent = reservations.acquire(
                 id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,

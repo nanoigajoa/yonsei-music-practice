@@ -122,6 +122,77 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         reserve.assert_awaited_once()
 
+    async def test_kiosk_returned_active_record_is_reconciled_before_new_reservation(self):
+        """현장 반납을 확인한 기존 기록만 종료하고 새 예약을 진행한다."""
+        start = datetime.now().replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="kiosk-returned", uid="user", student_id="2022172528", student_key=key,
+            corner_no=6, room_no="119",
+        )
+        reservations.finalize(
+            "kiosk-returned", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        reservations.set_status("kiosk-returned", "active")
+        next_start = start + timedelta(minutes=10)
+
+        with patch.object(
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "missing"})
+        ) as state, patch.object(
+            main.booking, "reserve", AsyncMock(return_value={
+                "success": True, "message": "예약 완료", "start_at": next_start.isoformat(),
+                "booking_no": "new-booking",
+            })
+        ) as reserve, patch.object(
+            main.collector, "clear_reserved", AsyncMock(return_value=True)
+        ) as clear, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh:
+            result = await main.reserve_room(
+                main.BookingRequest(
+                    student_id="2022172528", corner_no=8, room_no="313", limit_time=120,
+                ),
+                user={"uid": "user"},
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(reservations.get("kiosk-returned").status, "returned")
+        state.assert_awaited_once_with("2022172528", 6, "old-booking")
+        clear.assert_awaited_once_with(6, "119", reservation_id="kiosk-returned")
+        refresh.assert_awaited_once_with(6)
+        reserve.assert_awaited_once()
+
+    async def test_confirmed_active_record_still_blocks_new_reservation(self):
+        """같은 예약 번호가 활성이면 기존 409 차단을 유지한다."""
+        start = datetime.now().replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="still-active", uid="user", student_id="2022172528", student_key=key,
+            corner_no=8, room_no="313",
+        )
+        reservations.finalize(
+            "still-active", start_at=start, duration_min=120, kiosk_booking_no="active-booking",
+        )
+        reservations.set_status("still-active", "active")
+
+        with patch.object(
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "active"})
+        ) as state, patch.object(main.booking, "reserve", AsyncMock()) as reserve:
+            with self.assertRaises(HTTPException) as raised:
+                await main.reserve_room(
+                    main.BookingRequest(
+                        student_id="2022172528", corner_no=6, room_no="119", limit_time=120,
+                    ),
+                    user={"uid": "user"},
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(reservations.get("still-active").status, "active")
+        state.assert_awaited_once_with("2022172528", 8, "active-booking")
+        reserve.assert_not_awaited()
+
     async def test_cancel_pending_then_immediate_new_reservation_succeeds(self):
         """태그 전 취소는 학교/로컬 선점을 풀고 즉시 재예약할 수 있어야 한다."""
         start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
