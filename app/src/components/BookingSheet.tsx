@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { Room } from '@/hooks/useRoomStatus'
-import { useAnnouncements } from '@/components/Announcements'
 import { auth } from '@/lib/firebase'
 import { bookingApiErrorMessage } from '@/lib/bookingApiError'
 import { bookingFailureReason, trackBookingEvent } from '@/lib/bookingAnalytics'
@@ -46,7 +45,6 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
   onChanged: () => void
   onSessionChange: (booking: ActiveBooking | null) => void
 }) {
-  const { dailyEnabled } = useAnnouncements()
   const studentId = getStudentId()
   const durations = availableDurations(room)
   const [duration, setDuration] = useState(() => durations.includes(120) ? 120 : (durations[0] ?? 30))
@@ -268,7 +266,6 @@ export function BookingSheet({ room, resumedBooking, onClose, onChanged, onSessi
               </option>)}
             </select>
           </label>
-          {dailyEnabled && <p className="text-xs leading-5 text-rose-700">매일 21:50에 이 앱으로 빌려 사용 중인 방을 자동 반납해요. 남은 시간과 관계없이 적용돼요.</p>}
           <button onClick={reserve} disabled={loading}
             className="h-14 w-full rounded-2xl bg-rb-600 font-bold text-white disabled:opacity-50">
             {loadingAction === 'reserve' ? '실시간 확인·예약 중...' : displayedAvailable ? `${number}호 예약하기` : '실시간 확인 후 예약하기'}

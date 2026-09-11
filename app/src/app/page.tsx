@@ -12,7 +12,7 @@ import { OnboardingModal } from '@/components/OnboardingModal'
 import { useRoomStatus, Room } from '@/hooks/useRoomStatus'
 import { BookingSheet } from '@/components/BookingSheet'
 import { ActiveBooking, getActiveBooking, clearActiveBooking, saveActiveBooking, getStudentId } from '@/lib/localBooking'
-import { isCurrentlyAvailable, isEndingSoon } from '@/lib/roomAvailability'
+import { isCurrentlyAvailable, isEndingSoon, isOperatingHours } from '@/lib/roomAvailability'
 
 // ── 연결 상태 배지 ────────────────────────────────────────
 const CONN_BADGE: Record<string, string> = {
@@ -99,13 +99,17 @@ function RoomChip({ room, now, onReserve }: { room: Room; now: number | null; on
     )
   }
 
-  // 가용 여부를 판단할 정보가 없는 방은 상태 문구 없이 표시한다.
+  // 학교 키오스크에서 직접 예약한 뒤 학생증 태그 전에는 현재 슬롯이
+  // 공실도 사용중도 아닌 상태로 내려온다. 앱 예약의 노란 인증대기와
+  // 구분할 수 있도록 흰색 인증대기로 표시한다.
+  const kioskPendingTag = isOperatingHours(now)
   return (
     <button onClick={() => onReserve(room)}
-      className="w-full rounded-xl bg-gray-50 border-2 border-gray-200 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform">
-      <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-      <span className="text-xs font-bold text-gray-700 leading-none mt-0.5">{num}호</span>
-      {isOrgan && <span className="text-[9px] text-gray-500 leading-none">오르간</span>}
+      className={`w-full rounded-xl border-2 px-2 py-2.5 flex flex-col items-center gap-0.5 min-h-[64px] justify-center active:scale-95 transition-transform ${kioskPendingTag ? 'bg-white border-gray-300' : 'bg-gray-50 border-gray-200'}`}>
+      <div className={`w-1.5 h-1.5 rounded-full ${kioskPendingTag ? 'bg-white border border-gray-400' : 'bg-gray-300'}`} />
+      <span className={`text-xs font-bold leading-none mt-0.5 ${kioskPendingTag ? 'text-gray-800' : 'text-gray-700'}`}>{num}호</span>
+      {isOrgan && <span className="text-[9px] leading-none text-gray-500">오르간</span>}
+      {kioskPendingTag && <span className="text-[10px] text-gray-700 leading-none">인증대기</span>}
     </button>
   )
 }
@@ -439,6 +443,8 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2">
             {[
               { dot: 'bg-emerald-400', label: '공실' },
+              { dot: 'bg-amber-400',   label: '앱 인증대기' },
+              { dot: 'bg-white border border-gray-400', label: '키오스크 인증대기' },
               { dot: 'bg-rb-400',      label: '사용중' },
               { dot: 'bg-rose-600',    label: '두칸남음' },
             ].map(({ dot, label }) => (

@@ -3,6 +3,13 @@ export interface AvailabilityRoom {
   available_periods: unknown[]
 }
 
+export function isOperatingHours(now: number | null): boolean {
+  if (now === null || !Number.isFinite(now)) return false
+  const seoul = new Date(now + 9 * 60 * 60 * 1000)
+  const minutes = seoul.getUTCHours() * 60 + seoul.getUTCMinutes()
+  return minutes >= 7 * 60 && minutes < 22 * 60
+}
+
 /** 지금 바로 예약 가능한 초록색 카드와 같은 판정 기준이다. */
 export function isCurrentlyAvailable(room: AvailabilityRoom): boolean {
   return !room.occupied && room.available_periods.length > 0

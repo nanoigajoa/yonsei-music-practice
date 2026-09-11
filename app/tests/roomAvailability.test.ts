@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { isCurrentlyAvailable, isEndingSoon } from '../src/lib/roomAvailability.ts'
+import { isCurrentlyAvailable, isEndingSoon, isOperatingHours } from '../src/lib/roomAvailability.ts'
 
 test('빈 방이면서 예약 가능한 시간이 있을 때만 현재 공실이다', () => {
   assert.equal(isCurrentlyAvailable({ occupied: false, available_periods: [{ start: '10:00' }] }), true)
@@ -13,6 +13,14 @@ test('인증대기·사용 중인 방은 빈 시간이 보여도 공실에서 �
 
 test('빈 방이어도 즉시 예약 가능한 시간이 없으면 공실만 보기에 포함하지 않는다', () => {
   assert.equal(isCurrentlyAvailable({ occupied: false, available_periods: [] }), false)
+})
+
+test('키오스크 인증대기는 운영시간에만 표시한다', () => {
+  assert.equal(isOperatingHours(Date.parse('2026-09-08T07:00:00+09:00')), true)
+  assert.equal(isOperatingHours(Date.parse('2026-09-08T21:59:59+09:00')), true)
+  assert.equal(isOperatingHours(Date.parse('2026-09-08T06:59:59+09:00')), false)
+  assert.equal(isOperatingHours(Date.parse('2026-09-08T22:00:00+09:00')), false)
+  assert.equal(isOperatingHours(null), false)
 })
 
 const occupiedRoom = { occupied: true, occupied_until: '18:00' }
