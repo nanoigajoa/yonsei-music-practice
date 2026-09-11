@@ -264,7 +264,7 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
             ("777", "<table></table>", "active"),
             ("", receipt(), "pending_tag"),
             ("", "<table><tr><td>예약 내역이 없습니다.</td></tr></table>", "missing"),
-            ("888", "<table></table>", "unknown"),
+            ("888", "<table></table>", "different_active"),
             (None, "unexpected response", "unknown"),
         ]
         for active_number, info_html, expected in cases:

@@ -393,7 +393,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reservations.get(record.id).status, "active")
         cancel.assert_not_awaited()
 
-    async def test_import_restores_existing_active_booking_without_new_kiosk_lookup(self):
+    async def test_import_restores_existing_active_booking_after_kiosk_lookup(self):
         start = datetime.now().replace(second=0, microsecond=0)
         reservations.bind_student("user", student_key("2022172528"))
         reservations.acquire(id="active-one", uid="user", student_id="2022172528", student_key=student_key("2022172528"),
@@ -401,7 +401,13 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.finalize("active-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking")
         reservations.set_status("active-one", "active")
 
-        with patch.object(main.booking, "active_details", AsyncMock()) as active_details:
+        with patch.object(main.booking, "active_details", AsyncMock(return_value={
+            "success": True,
+            "booking_no": "old-booking",
+            "room_no": "119",
+            "start_at": start.isoformat(),
+            "end_at": (start + timedelta(minutes=120)).isoformat(),
+        })) as active_details:
             result = await main.import_active_booking(
                 main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="119"),
                 user={"uid": "user"},
@@ -409,7 +415,89 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         self.assertTrue(result["return_token"])
         self.assertEqual(result["booking_no"], "old-booking")
-        active_details.assert_not_awaited()
+        active_details.assert_awaited_once_with("2022172528", 1)
+
+    async def test_import_closes_app_only_active_booking_when_kiosk_has_none(self):
+        start = datetime.now().replace(second=0, microsecond=0)
+        reservations.bind_student("user", student_key("2022172528"))
+        reservations.acquire(
+            id="stale-active", uid="user", student_id="2022172528",
+            student_key=student_key("2022172528"), corner_no=1, room_no="119",
+        )
+        reservations.finalize(
+            "stale-active", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        reservations.set_status("stale-active", "active")
+        no_active = {"success": False, "message": "키오스크에서 사용 중인 예약을 찾지 못했습니다."}
+
+        with patch.object(
+            main.booking, "active_details", AsyncMock(side_effect=[no_active, no_active])
+        ) as active_details, patch.object(
+            main.booking, "pending_state_once", AsyncMock(return_value={"state": "missing"})
+        ) as pending_state, patch.object(
+            main.collector, "clear_reserved", AsyncMock()
+        ) as clear_reserved, patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ) as refresh_corner:
+            result = await main.import_active_booking(
+                main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="119"),
+                user={"uid": "user"},
+            )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(reservations.get("stale-active").status, "returned")
+        self.assertIsNone(reservations.open_for_uid("user"))
+        self.assertEqual(active_details.await_count, 2)
+        pending_state.assert_awaited_once_with("2022172528", 1, "old-booking")
+        clear_reserved.assert_awaited_once_with(1, "119", reservation_id="stale-active")
+        refresh_corner.assert_awaited_once_with(1)
+
+    async def test_import_replaces_stale_app_booking_with_current_kiosk_booking(self):
+        start = datetime.now().replace(second=0, microsecond=0)
+        new_start = start + timedelta(minutes=10)
+        reservations.bind_student("user", student_key("2022172528"))
+        reservations.acquire(
+            id="stale-active", uid="user", student_id="2022172528",
+            student_key=student_key("2022172528"), corner_no=1, room_no="119",
+        )
+        reservations.finalize(
+            "stale-active", start_at=start, duration_min=120, kiosk_booking_no="old-booking",
+        )
+        reservations.set_status("stale-active", "active")
+        current = {
+            "success": True,
+            "booking_no": "new-booking",
+            "room_no": "313",
+            "start_at": new_start.isoformat(),
+            "end_at": (new_start + timedelta(minutes=120)).isoformat(),
+        }
+
+        with patch.object(
+            main.booking, "active_details", AsyncMock(side_effect=[current, current])
+        ), patch.object(
+            main.booking, "pending_state_once",
+            AsyncMock(return_value={"state": "different_active", "booking_no": "new-booking"}),
+        ) as pending_state, patch.object(
+            main.collector, "clear_reserved", AsyncMock()
+        ), patch.object(
+            main.collector, "refresh_corner_now", AsyncMock(return_value=True)
+        ), patch.object(
+            main.collector, "mark_active", AsyncMock()
+        ) as mark_active:
+            result = await main.import_active_booking(
+                main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="313"),
+                user={"uid": "user"},
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["booking_no"], "new-booking")
+        self.assertEqual(reservations.get("stale-active").status, "returned")
+        current_record = reservations.open_for_uid("user")
+        self.assertIsNotNone(current_record)
+        self.assertEqual(current_record.room_no, "313")
+        self.assertEqual(current_record.kiosk_booking_no, "new-booking")
+        pending_state.assert_awaited_once_with("2022172528", 1, "old-booking")
+        mark_active.assert_awaited_once()
 
     async def test_tag_check_before_reservation_start_does_not_query_kiosk(self):
         start = (datetime.now() + timedelta(minutes=5)).replace(second=0, microsecond=0)

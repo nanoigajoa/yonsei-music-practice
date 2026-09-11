@@ -432,7 +432,7 @@ async def pending_state_once(student_id: str, corner_no: int, booking_no: str | 
         if active_number == booking_no:
             return {"state": "active", "booking_no": booking_no}
         if active_number not in {None, ""}:
-            return {"state": "unknown"}
+            return {"state": "different_active", "booking_no": active_number}
 
         page = await client.get(
             f"{BASE}/booking/booking_info.php",

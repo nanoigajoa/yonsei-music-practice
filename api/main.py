@@ -187,7 +187,7 @@ async def _reconcile_kiosk_return(record: reservations.Reservation) -> bool:
         except httpx.HTTPError as exc:
             log.warning("키오스크 수동 반납 확인 실패 | room=%s error=%s", current.room_no, exc)
             return False
-        if state.get("state") != "missing":
+        if state.get("state") not in {"missing", "different_active"}:
             return False
         returned = reservations.set_status(current.id, "returned")
         if not returned or returned.status != "returned":
@@ -720,13 +720,27 @@ async def active_booking(data: BookingActionRequest, user: dict = Depends(curren
 async def import_active_booking(data: KioskImportRequest, user: dict = Depends(current_user)):
     """앱 밖 키오스크에서 태그한 현재 사용 건을 안전하게 앱에 연결한다."""
     _require_bound_student(user, data.student_id)
-    # 브라우저 저장소를 지웠거나 다른 기기에서 접속했어도, 이 API가 이전에
-    # 확인한 본인 사용 기록은 새 예약으로 만들지 않는다. 새 반납 권한만 다시
-    # 발급해 '이미 예약 또는 사용 중' 충돌 없이 현재 사용 화면을 복원한다.
+    # 불러오기는 앱 DB가 아니라 키오스크의 현재 상태를 기준으로 한다. 앱에만
+    # 남은 이전 사용 기록은 아래 재확인에서 반납 완료로 닫아 다음 예약을 막지
+    # 않게 하고, 키오스크에 실제로 남은 사용 건만 앱에 연결한다.
+    try:
+        result = await booking.active_details(data.student_id, data.corner_no)
+    except httpx.HTTPError as exc:
+        log.warning("키오스크 사용 예약 불러오기 실패: %s", exc)
+        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+
     existing = reservations.open_for_uid(user["uid"])
     if existing:
-        if existing.status == "active" and existing.corner_no == data.corner_no and existing.room_no == data.room_no:
-            result = {
+        current_matches_existing = (
+            existing.status == "active"
+            and result.get("success")
+            and result.get("booking_no") == existing.kiosk_booking_no
+            and result.get("room_no") == existing.room_no
+        )
+        if current_matches_existing:
+            if result.get("room_no") != data.room_no:
+                return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
+            restored = {
                 "success": True,
                 "active": True,
                 "booking_no": existing.kiosk_booking_no,
@@ -735,12 +749,26 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
                 "end_at": existing.end_at.isoformat(),
                 "message": f"진행 중인 {existing.room_no}호 사용을 불러왔습니다.",
             }
-            result["return_token"] = issue_return_token(
+            restored["return_token"] = issue_return_token(
                 user["uid"], data.student_id, data.corner_no, data.room_no, existing.id
             )
-            result["reservation"] = _reservation_payload(existing)
-            return result
-        raise HTTPException(409, "이미 예약 또는 사용 중인 연습실이 있습니다. 기존 예약을 취소하거나 반납해 주세요.")
+            restored["reservation"] = _reservation_payload(existing)
+            return restored
+        if existing.status != "active" or not await _reconcile_kiosk_return(existing):
+            raise HTTPException(409, "기존 예약 상태를 키오스크와 확인 중입니다. 잠시 후 다시 불러와 주세요.")
+        # 재확인 사이에 키오스크 상태가 바뀌었을 수 있으므로, 이전 행을 닫은 뒤
+        # 실제로 가져올 현재 사용 건을 한 번 더 읽는다.
+        try:
+            result = await booking.active_details(data.student_id, data.corner_no)
+        except httpx.HTTPError as exc:
+            log.warning("키오스크 사용 예약 재조회 실패: %s", exc)
+            raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
+
+    if not result.get("success"):
+        return result
+    if result.get("room_no") != data.room_no:
+        return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
+
     try:
         intent = reservations.acquire(
             id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
@@ -749,13 +777,6 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
     except reservations.ReservationConflict as exc:
         raise HTTPException(409, str(exc)) from exc
     try:
-        result = await booking.active_details(data.student_id, data.corner_no)
-        if not result.get("success"):
-            reservations.fail(intent.id)
-            return result
-        if result.get("room_no") != data.room_no:
-            reservations.fail(intent.id)
-            return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
         start_at = parse_kst(result["start_at"])
         end_at = parse_kst(result["end_at"])
         duration = max(1, int((end_at - start_at).total_seconds() // 60))
@@ -767,10 +788,6 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
         await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
                                     end_at=record.end_at, reservation_id=record.id)
         return result
-    except httpx.HTTPError as exc:
-        reservations.fail(intent.id)
-        log.warning("키오스크 사용 예약 불러오기 실패: %s", exc)
-        raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
     except (KeyError, ValueError) as exc:
         reservations.fail(intent.id)
         raise HTTPException(502, "키오스크 사용 예약 정보를 해석하지 못했습니다.") from exc
