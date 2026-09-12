@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   User, onAuthStateChanged, browserLocalPersistence, setPersistence,
   GoogleAuthProvider, getRedirectResult, linkWithPopup, linkWithRedirect,
-  signInWithPopup, signInWithRedirect,
+  signInWithPopup, signInWithRedirect, signOut,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { GoogleLinkResult, googleErrorResult } from '@/lib/googleAuthError'
@@ -55,6 +55,7 @@ export function useAnonymousAuth() {
   // 모바일은 Firebase 권장 방식인 redirect, 데스크톱은 팝업을 사용한다.
   const linkGoogle = useCallback(async (): Promise<GoogleLinkResult> => {
     const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: 'select_account' })
     setAuthError(null)
     try {
       if (shouldUseRedirect()) {
@@ -104,5 +105,7 @@ export function useAnonymousAuth() {
     ? user?.providerData.find((p) => p.providerId === 'google.com')?.email ?? null
     : null
 
-  return { user, loading, authError, linkGoogle, restoreWithGoogle, isLinked, linkedEmail }
+  const logout = useCallback(() => signOut(auth), [])
+
+  return { user, loading, authError, linkGoogle, restoreWithGoogle, logout, isLinked, linkedEmail }
 }

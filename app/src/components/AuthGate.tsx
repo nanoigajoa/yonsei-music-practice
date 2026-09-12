@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAnonymousAuth } from '@/hooks/useAnonymousAuth'
-import { getStudentId, YONSEI_STUDENT_ID_PATTERN, saveStudentId } from '@/lib/localBooking'
+import { clearStudentId, getStudentId, YONSEI_STUDENT_ID_PATTERN, saveStudentId } from '@/lib/localBooking'
 
 const API_URL = process.env.NEXT_PUBLIC_BOOKING_API_URL
   ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
@@ -30,7 +30,7 @@ function bindingErrorMessage(cause: unknown): string {
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, loading, authError, linkGoogle } = useAnonymousAuth()
+  const { user, loading, authError, linkGoogle, logout, linkedEmail } = useAnonymousAuth()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState('')
   const [studentId, setStudentId] = useState('')
@@ -39,6 +39,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [bindingAttempt, setBindingAttempt] = useState(0)
   const [noticeAcknowledged, setNoticeAcknowledged] = useState(false)
   const authenticated = user && !user.isAnonymous
+
+  async function chooseGoogleAccount() {
+    setSigningIn(true)
+    setError('')
+    try {
+      await logout()
+      // 서버의 연결과 실제 예약은 유지하고, 이전 계정의 기기 내 정보만 비운다.
+      clearStudentId()
+      window.location.reload()
+    } catch {
+      setError('로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.')
+      setSigningIn(false)
+    }
+  }
+
+  const accountControls = <div className="mt-4 w-full rounded-2xl bg-white/10 p-4 text-xs leading-5 text-white">
+    <p className="break-all">현재 로그인된 Google 계정: {linkedEmail ?? user?.email ?? '이메일 확인 불가'}</p>
+    <p className="mt-1">이전에 로그인한 계정이 자동으로 연결되어 있을 수 있어요.</p>
+    <button type="button" onClick={chooseGoogleAccount} disabled={signingIn}
+      className="mt-3 min-h-11 w-full rounded-xl bg-white px-3 font-bold text-gray-900 disabled:opacity-50">
+      로그아웃하고 Google 계정 다시 선택
+    </button>
+    <p className="mt-2">로그아웃 후 ‘Google로 시작하기’를 눌러 주세요. 실제 예약과 서버의 학번 연결은 삭제되지 않아요.</p>
+    {error && <p className="mt-2">본인 계정인데도 다른 학번이 등록됐다고 나오면 <a href="https://open.kakao.com/o/suKUBswi" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">운영자에게 연결 확인 요청</a>을 해 주세요.</p>}
+  </div>
 
   async function login() {
     setSigningIn(true)
@@ -133,6 +158,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <main className="min-h-dvh max-w-md mx-auto bg-rb-600 px-6 flex flex-col items-center justify-center text-center text-white">
       <h1 className="text-xl font-bold">학번 연결을 확인하지 못했어요</h1>
       <p role="alert" className="mt-3 text-sm leading-6">{error}</p>
+      {accountControls}
       <p className="mt-3 text-xs leading-5">저장된 학번은 유지되어 있어요. 학번을 다시 입력할 필요는 없어요.</p>
       <button onClick={() => setBindingAttempt(value => value + 1)} className="mt-6 h-14 w-full rounded-2xl bg-white font-bold text-rb-700">다시 연결하기</button>
       <button onClick={() => { setStudentId(savedStudentId); setSavedStudentId(''); setBinding('idle'); setError('') }} className="mt-4 text-xs underline underline-offset-4">입력한 학번 수정</button>
@@ -148,6 +174,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <div className="w-20 h-20 rounded-3xl bg-white/15 flex items-center justify-center text-4xl">🪪</div>
         <h1 className="mt-6 text-2xl font-bold text-white">학번을 한 번만 입력하세요</h1>
         <p className="mt-2 text-sm leading-6 text-white">연세대학교 학번 10자리를 입력하세요.<br />학교 키오스크에서 이용 가능한 학번만 등록됩니다.</p>
+        {accountControls}
         <input value={studentId} onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
           inputMode="numeric" maxLength={10} placeholder="학번 10자리"
           className="mt-7 h-14 w-full rounded-2xl bg-white px-4 text-center text-lg font-bold text-gray-900 outline-none" />
