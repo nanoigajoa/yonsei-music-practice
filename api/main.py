@@ -47,6 +47,7 @@ _pending_missing_checks: dict[str, int] = {}
 _inflight_reservations: set[str] = set()
 _recovery_gate: asyncio.Semaphore | None = None
 _recovery_gate_loop: asyncio.AbstractEventLoop | None = None
+_background_tasks: set[asyncio.Task] = set()
 
 PRIVACY_NOTICE_VERSION = "2026-09-06"
 ALLOWED_TEST_ROOMS = {
@@ -93,6 +94,13 @@ def _kiosk_tag_sync_gate() -> asyncio.Semaphore:
         _tag_sync_gate = asyncio.Semaphore(MAX_CONCURRENT_TAG_SYNC_CHECKS)
         _tag_sync_gate_loop = loop
     return _tag_sync_gate
+
+
+def _refresh_corner_after_response(corner_no: int) -> None:
+    """반납 성공 응답을 막지 않으면서 학교 원본 현황을 즉시 다시 읽는다."""
+    task = asyncio.create_task(collector.refresh_corner_now(corner_no))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @asynccontextmanager
@@ -732,6 +740,18 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
 
     reconciled_existing = False
     existing = reservations.open_for_uid(user["uid"])
+    # 앱 요청 응답만 유실된 submitting/uncertain 기록보다, 로그인까지 확인한
+    # 학교의 현재 예약번호·방·시간이 더 강한 증거다. 학교 내역이 있을 때만
+    # 임시 기록을 terminal 상태로 닫고 실제 키오스크 예약을 새로 연결한다.
+    if existing and existing.status in reservations.UNCONFIRMED_STATUSES:
+        if not result.get("success"):
+            raise HTTPException(409, "기존 예약 상태를 키오스크와 확인 중입니다. 잠시 후 다시 불러와 주세요.")
+        closed = reservations.set_status(existing.id, "reconciled")
+        if not closed or closed.status != "reconciled":
+            raise HTTPException(409, "기존 예약 상태가 변경되어 다시 확인해 주세요.")
+        await collector.clear_reserved(closed.corner_no, closed.room_no, reservation_id=closed.id)
+        reconciled_existing = True
+        existing = None
     if existing:
         current_matches_existing = (
             existing.status in {"pending_tag", "active"}
@@ -766,7 +786,7 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
             )
             restored["reservation"] = _reservation_payload(existing)
             return restored
-        if existing.status not in {"pending_tag", "active"} or not await _reconcile_kiosk_return(existing):
+        if not await _reconcile_kiosk_return(existing):
             raise HTTPException(409, "기존 예약 상태를 키오스크와 확인 중입니다. 잠시 후 다시 불러와 주세요.")
         reconciled_existing = True
         # 재확인 사이에 키오스크 상태가 바뀌었을 수 있으므로, 이전 행을 닫은 뒤
@@ -835,9 +855,9 @@ async def _return_booking_locked(data: BookingActionRequest, user: dict, claims:
             reservations.set_status(record.id, "returned")
             await collector.clear_reserved(data.corner_no, str(claims.get("room", "")),
                                            reservation_id=record.id)
-            # 응답 전에 해당 코너만 원본에서 다시 읽어, 반납 후
-            # 예전 '사용중' 카드가 남은 채로 사용자 화면에 돌아가지 않게 한다.
-            await collector.refresh_corner_now(data.corner_no)
+            # 학교 반납 성공은 즉시 응답하고, 상대적으로 느린 층 현황 재조회는
+            # 백그라운드에서 이어간다. 실제 반납/DB 기록은 이미 끝난 상태다.
+            _refresh_corner_after_response(data.corner_no)
         return result
     except httpx.HTTPError as exc:
         log.warning("반납 연동 실패: %s", exc)
