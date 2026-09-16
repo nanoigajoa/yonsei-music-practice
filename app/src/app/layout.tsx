@@ -9,6 +9,8 @@ import { ThemeController } from '@/components/ThemeSettings'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
+const bookingApiUrl = process.env.NEXT_PUBLIC_BOOKING_API_URL
+  ?? process.env.NEXT_PUBLIC_KIOSK_API_URL
 
 export const metadata: Metadata = {
   title: '음대 연습실',
@@ -48,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        {bookingApiUrl && <link rel="preconnect" href={bookingApiUrl} crossOrigin="anonymous" />}
       </head>
       <body className="min-h-full font-sans antialiased">
         <ThemeController />

@@ -82,6 +82,12 @@ export function BookingSheet({ room, rooms, resumedBooking, onClose, onChanged, 
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [loading, onClose])
 
+  // 시트를 연 직후 Firebase SDK의 유효 토큰을 메모리에 준비한다. 만료가
+  // 가까운 경우의 갱신도 버튼을 누르기 전에 시작해 선착순 요청을 늦추지 않는다.
+  useEffect(() => {
+    void auth.currentUser?.getIdToken().catch(() => undefined)
+  }, [])
+
   async function call(
     path: string,
     body: Record<string, unknown>,
@@ -93,8 +99,9 @@ export function BookingSheet({ room, rooms, resumedBooking, onClose, onChanged, 
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
     try {
-      // 예약 직전에 토큰을 강제 갱신해 만료된 캐시 토큰을 보내지 않도록 한다.
-      const idToken = await auth.currentUser?.getIdToken(true)
+      // Firebase SDK는 만료된 토큰만 자동 갱신한다. 매 클릭마다 강제 갱신하면
+      // 실제 예약 요청이 수백 ms~수초 늦게 출발해 선착순 경쟁에 불리해진다.
+      const idToken = await auth.currentUser?.getIdToken()
       if (!idToken) throw new Error('로그인이 필요합니다.')
       const res = await fetch(`${API_URL}${path}`, {
         method: 'POST',
