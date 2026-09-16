@@ -650,38 +650,21 @@ async def active_booking(data: BookingActionRequest, user: dict = Depends(curren
 async def import_active_booking(data: KioskImportRequest, user: dict = Depends(current_user)):
     """앱 밖 키오스크에서 태그한 현재 사용 건을 안전하게 앱에 연결한다."""
     _require_bound_student(user, data.student_id)
-    # 브라우저 저장소를 지웠거나 다른 기기에서 접속했어도, 이 API가 이전에
-    # 확인한 본인 사용 기록은 새 예약으로 만들지 않는다. 새 반납 권한만 다시
-    # 발급해 '이미 예약 또는 사용 중' 충돌 없이 현재 사용 화면을 복원한다.
-    existing = reservations.open_for_uid(user["uid"])
-    if existing and existing.status == "active" and existing.corner_no == data.corner_no and existing.room_no == data.room_no:
-        result = {
-            "success": True,
-            "active": True,
-            "booking_no": existing.kiosk_booking_no,
-            "room_no": existing.room_no,
-            "start_at": existing.start_at.isoformat(),
-            "end_at": existing.end_at.isoformat(),
-            "message": f"진행 중인 {existing.room_no}호 사용을 불러왔습니다.",
-        }
-        result["return_token"] = issue_return_token(
-            user["uid"], data.student_id, data.corner_no, data.room_no, existing.id
-        )
-        result["reservation"] = _reservation_payload(existing)
-        return result
+    # 앱 DB보다 학교의 예약현황을 먼저 읽는다. 태그 전 예약(pending_tag)과
+    # 태그 후 사용(active)을 같은 학교 예약번호로 판별해 복원한다.
     try:
-        result = await booking.active_details(data.student_id, data.corner_no)
+        result = await booking.current_details(data.student_id, data.corner_no)
         if not result.get("success"):
             return result
         if result.get("room_no") != data.room_no:
-            return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
+            return {"success": False, "message": "선택한 방과 키오스크의 현재 예약 방이 다릅니다."}
         start_at = parse_kst(result["start_at"])
         end_at = parse_kst(result["end_at"])
-        record, reconciled = reservations.import_active(
+        record, reconciled = reservations.import_school_current(
             id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
             student_key=student_key(data.student_id), corner_no=data.corner_no,
             room_no=data.room_no, start_at=start_at, end_at=end_at,
-            kiosk_booking_no=result["booking_no"],
+            kiosk_booking_no=result["booking_no"], status=result.get("status", "active"),
         )
         result["return_token"] = issue_return_token(user["uid"], data.student_id, data.corner_no, data.room_no, record.id)
         result["reservation"] = _reservation_payload(record)
@@ -689,14 +672,7 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
             await collector.clear_reserved(
                 reconciled.corner_no, reconciled.room_no, reservation_id=reconciled.id,
             )
-        await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
-                                    end_at=record.end_at, reservation_id=record.id)
-        if AUTO_RETURN_ENABLED:
-            await auto_return.register(
-                record.uid, record.student_id, record.corner_no, record.room_no,
-                due_at=record.end_at, booking_no=record.kiosk_booking_no,
-                reservation_id=record.id,
-            )
+        await _publish_reservation(record)
         return result
     except reservations.ReservationConflict as exc:
         raise HTTPException(409, str(exc)) from exc

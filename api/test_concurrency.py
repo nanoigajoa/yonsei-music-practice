@@ -340,7 +340,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reservations.get(record.id).status, "active")
         cancel.assert_not_awaited()
 
-    async def test_import_restores_existing_active_booking_without_new_kiosk_lookup(self):
+    async def test_import_restores_existing_active_booking_from_school_state(self):
         start = datetime.now().replace(second=0, microsecond=0)
         reservations.bind_student("user", student_key("2022172528"))
         reservations.acquire(id="active-one", uid="user", student_id="2022172528", student_key=student_key("2022172528"),
@@ -348,7 +348,11 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.finalize("active-one", start_at=start, duration_min=120, kiosk_booking_no="old-booking")
         reservations.set_status("active-one", "active")
 
-        with patch.object(main.booking, "active_details", AsyncMock()) as active_details:
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
+            "success": True, "status": "active", "booking_no": "old-booking", "room_no": "119",
+            "start_at": start.isoformat(), "end_at": (start + timedelta(minutes=120)).isoformat(),
+            "message": "키오스크 119호 사용 중 예약을 불러왔습니다.",
+        })) as current_details:
             result = await main.import_active_booking(
                 main.KioskImportRequest(student_id="2022172528", corner_no=1, room_no="119"),
                 user={"uid": "user"},
@@ -356,7 +360,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         self.assertTrue(result["return_token"])
         self.assertEqual(result["booking_no"], "old-booking")
-        active_details.assert_not_awaited()
+        current_details.assert_awaited_once()
 
     async def test_import_reconciles_uncertain_app_request_with_school_active_use(self):
         planned = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
@@ -370,12 +374,12 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.begin_submission(intent.id, start_at=planned)
         reservations.mark_uncertain(intent.id)
 
-        with patch.object(main.booking, "active_details", AsyncMock(return_value={
-            "success": True, "booking_no": "school-active", "room_no": "119",
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
+            "success": True, "status": "active", "booking_no": "school-active", "room_no": "119",
             "start_at": active_start.isoformat(),
             "end_at": (active_start + timedelta(minutes=60)).isoformat(),
             "message": "키오스크 119호 사용 중 예약을 불러왔습니다.",
-        })) as active_details, patch.object(
+        })) as current_details, patch.object(
             main.collector, "clear_reserved", AsyncMock(return_value=True)
         ) as clear, patch.object(main.collector, "mark_active", AsyncMock()) as mark_active:
             result = await main.import_active_booking(
@@ -388,7 +392,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(result["reservation"]["id"], intent.id)
         self.assertEqual(reservations.get(intent.id).status, "reconciled")
         self.assertEqual(reservations.open_for_uid("user").status, "active")
-        active_details.assert_awaited_once()
+        current_details.assert_awaited_once()
         clear.assert_awaited_once_with(1, "119", reservation_id=intent.id)
         mark_active.assert_awaited_once()
 
@@ -405,8 +409,8 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             kiosk_booking_no="pending-school-number",
         )
 
-        with patch.object(main.booking, "active_details", AsyncMock(return_value={
-            "success": True, "booking_no": "pending-school-number", "room_no": "119",
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
+            "success": True, "status": "active", "booking_no": "pending-school-number", "room_no": "119",
             "start_at": start.isoformat(),
             "end_at": (start + timedelta(minutes=120)).isoformat(),
             "message": "키오스크 119호 사용 중 예약을 불러왔습니다.",
@@ -420,6 +424,35 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["reservation"]["id"], pending.id)
         self.assertEqual(reservations.get(pending.id).status, "active")
 
+    async def test_import_restores_same_pending_school_reservation(self):
+        start = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
+        key = student_key("2022172528")
+        reservations.bind_student("user", key)
+        reservations.acquire(
+            id="pending-school", uid="user", student_id="2022172528",
+            student_key=key, corner_no=4, room_no="421",
+        )
+        pending = reservations.finalize(
+            "pending-school", start_at=start, duration_min=120,
+            kiosk_booking_no="school-421",
+        )
+
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
+            "success": True, "status": "pending_tag", "booking_no": "school-421", "room_no": "421",
+            "start_at": start.isoformat(), "end_at": (start + timedelta(minutes=120)).isoformat(),
+            "message": "키오스크 421호 인증대기 예약을 불러왔습니다.",
+        })), patch.object(main.collector, "mark_reserved", AsyncMock()) as mark_reserved:
+            result = await main.import_active_booking(
+                main.KioskImportRequest(student_id="2022172528", corner_no=4, room_no="421"),
+                user={"uid": "user"},
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["reservation"]["id"], pending.id)
+        self.assertEqual(result["reservation"]["status"], "pending_tag")
+        self.assertEqual(reservations.get(pending.id).status, "pending_tag")
+        mark_reserved.assert_awaited_once()
+
     async def test_import_without_school_active_evidence_keeps_uncertain_record(self):
         planned = (datetime.now() + timedelta(minutes=10)).replace(second=0, microsecond=0)
         key = student_key("2022172528")
@@ -431,7 +464,7 @@ class ReservationConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         reservations.begin_submission(intent.id, start_at=planned)
         reservations.mark_uncertain(intent.id)
 
-        with patch.object(main.booking, "active_details", AsyncMock(return_value={
+        with patch.object(main.booking, "current_details", AsyncMock(return_value={
             "success": False, "message": "키오스크에서 사용 중인 예약을 찾지 못했습니다.",
         })), patch.object(main.collector, "clear_reserved", AsyncMock()) as clear:
             result = await main.import_active_booking(

@@ -369,16 +369,18 @@ def finalize(id: str, *, start_at: datetime, duration_min: int, kiosk_booking_no
     return result
 
 
-def import_active(*, id: str, uid: str, student_id: str, student_key: str,
-                  corner_no: int, room_no: str, start_at: datetime, end_at: datetime,
-                  kiosk_booking_no: str) -> tuple[Reservation, Reservation | None]:
-    """학교가 증명한 현재 사용을 로컬의 오래된 임시 기록과 원자적으로 맞춘다.
+def import_school_current(*, id: str, uid: str, student_id: str, student_key: str,
+                          corner_no: int, room_no: str, start_at: datetime, end_at: datetime,
+                          kiosk_booking_no: str, status: str) -> tuple[Reservation, Reservation | None]:
+    """학교가 증명한 현재 예약/사용을 오래된 임시 기록과 원자적으로 맞춘다.
 
     앱 예약 결과가 uncertain으로 남아 있어도 학교의 현재 사용 기록은 더 강한
     증거다. 기존 임시 기록은 감사용 terminal 상태로 보존하고 별도의 active
     기록을 만든다. 같은 방의 pending_tag는 태그가 끝난 동일 예약이므로 그 행을
     active로 승격한다.
     """
+    if status not in {"pending_tag", "active"}:
+        raise ValueError("키오스크 예약 상태를 확인하지 못했습니다.")
     start = kst_normalize(start_at)
     end = kst_normalize(end_at)
     if end <= start:
@@ -399,13 +401,18 @@ def import_active(*, id: str, uid: str, student_id: str, student_key: str,
         existing = _row(existing_row)
 
         # 동시에 두 번 눌린 불러오기는 이미 연결된 같은 사용 기록을 그대로 쓴다.
-        if (existing and existing.status == "active" and existing.corner_no == corner_no
-                and existing.room_no == room_no and existing.kiosk_booking_no == kiosk_booking_no):
+        same_school_booking = (
+            existing is not None
+            and existing.corner_no == corner_no
+            and existing.room_no == room_no
+            and existing.kiosk_booking_no == kiosk_booking_no
+        )
+        if same_school_booking and existing.status == status:
             conn.execute("COMMIT")
             return existing, None
 
         # 앱 예약 후 키오스크에서 태그한 동일 방이면 새 기록을 만들지 않는다.
-        if existing and existing.status == "pending_tag" and existing.corner_no == corner_no and existing.room_no == room_no:
+        if same_school_booking and existing.status == "pending_tag" and status == "active":
             conn.execute(
                 """UPDATE reservations
                    SET start_at=?, end_at=?, tag_deadline=?, status='active', kiosk_booking_no=?, duration_min=?
@@ -419,16 +426,12 @@ def import_active(*, id: str, uid: str, student_id: str, student_key: str,
                 raise ValueError("키오스크 사용 기록을 연결하지 못했습니다.")
             return result, None
 
-        # 다른 방의 확정된 태그 대기 예약은 학교에서 명시적으로 취소하기 전에는
-        # 앱이 임의로 지우지 않는다.
-        if existing and existing.status == "pending_tag":
-            conn.execute("ROLLBACK")
-            raise ReservationConflict(
-                f"{existing.room_no}호 인증대기 예약이 남아 있습니다. 먼저 취소한 뒤 불러와 주세요."
-            )
-
         if existing:
-            terminal = "returned" if existing.status == "active" else "reconciled"
+            terminal = (
+                "returned" if existing.status == "active"
+                else "cancelled" if existing.status == "pending_tag"
+                else "reconciled"
+            )
             conn.execute("UPDATE reservations SET status=? WHERE id=?", (terminal, existing.id))
 
         overlap = conn.execute(
@@ -447,9 +450,9 @@ def import_active(*, id: str, uid: str, student_id: str, student_key: str,
                    (id, uid, student_id, student_key, corner_no, room_no, start_at, end_at,
                     tag_deadline, status, kiosk_booking_no, request_id, created_at,
                     duration_min, dispatch_started)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NULL, ?, ?, 0)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0)""",
                 (id, uid, student_id, student_key, corner_no, room_no, start.isoformat(),
-                 end.isoformat(), deadline.isoformat(), kiosk_booking_no, now.isoformat(), duration),
+                 end.isoformat(), deadline.isoformat(), status, kiosk_booking_no, now.isoformat(), duration),
             )
         except sqlite3.IntegrityError as exc:
             conn.execute("ROLLBACK")
@@ -458,7 +461,7 @@ def import_active(*, id: str, uid: str, student_id: str, student_key: str,
         conn.execute("COMMIT")
 
     result = _row(row)
-    if not result or result.status != "active":
+    if not result or result.status != status:
         raise ValueError("키오스크 사용 기록을 연결하지 못했습니다.")
     return result, existing
 

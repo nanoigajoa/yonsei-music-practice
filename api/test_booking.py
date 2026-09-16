@@ -259,6 +259,34 @@ class BookingPaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["active"])
         self.assertEqual(result["booking_no"], "777")
 
+    def test_pending_details_uses_only_cancellable_reservation(self):
+        html = (
+            receipt(start="11:10", end="13:09", room="421", number="421777")
+            + "<table><tr><td>2026-09-07 119호 10:40~10:54 이용자취소</td></tr></table>"
+        )
+        result = booking._pending_details(html)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["status"], "pending_tag")
+        self.assertEqual(result["room_no"], "421")
+        self.assertEqual(result["booking_no"], "421777")
+
+    async def test_current_details_returns_pending_kiosk_reservation(self):
+        client = AsyncMock()
+        client.get.return_value = Response(
+            receipt(start="11:10", end="13:09", room="421", number="421777")
+        )
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        with patch.object(booking.httpx, "AsyncClient", return_value=context), patch.object(
+            booking, "_login", AsyncMock(return_value=Response(LOGIN_HTML))
+        ), patch.object(booking, "_active_booking_no", AsyncMock(return_value=None)):
+            result = await booking.current_details("2022172528", 4)
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["status"], "pending_tag")
+        self.assertEqual(result["room_no"], "421")
+        self.assertEqual(result["booking_no"], "421777")
+
     async def test_cancel_failure_text_is_not_success(self):
         for text, success in (("예약 취소 실패", False), ("취소 버튼", False), ("예약 취소되었습니다.", True)):
             client = AsyncMock()
