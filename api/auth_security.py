@@ -6,20 +6,41 @@ import json
 import os
 import secrets
 import time
+from pathlib import Path
 
 import firebase_admin
 from fastapi import Header, HTTPException
 from firebase_admin import auth, credentials
 
 
+def _firebase_credential():
+    """Resolve Firebase Admin credentials for local and deployed environments."""
+    raw_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+    if raw_key:
+        return credentials.Certificate(json.loads(raw_key))
+
+    configured = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    candidates: list[Path] = []
+    if configured:
+        configured_path = Path(configured)
+        candidates.append(configured_path)
+        if not configured_path.is_absolute():
+            candidates.append(Path(__file__).resolve().parent / configured_path)
+
+    # Local transfer bundles keep this ignored service-account file beside api/.
+    candidates.append(Path(__file__).resolve().parent.parent / "campus-deploy" / "firebase-admin.json")
+    for candidate in candidates:
+        if candidate.is_file():
+            return credentials.Certificate(str(candidate))
+    return None
+
+
 def _firebase_app():
     try:
         return firebase_admin.get_app()
     except ValueError:
-        raw_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
-        if raw_key:
-            return firebase_admin.initialize_app(credentials.Certificate(json.loads(raw_key)))
-        return firebase_admin.initialize_app()
+        credential = _firebase_credential()
+        return firebase_admin.initialize_app(credential) if credential else firebase_admin.initialize_app()
 
 
 def current_user(authorization: str | None = Header(default=None)) -> dict:
@@ -45,12 +66,18 @@ def _student_digest(student_id: str) -> str:
     return hmac.new(_secret(), student_id.encode(), hashlib.sha256).hexdigest()
 
 
-def issue_return_token(uid: str, student_id: str, corner_no: int, room_no: str) -> str:
+def student_key(student_id: str) -> str:
+    """학번 원문 대신 예약 중복 판정에 쓸 안정적인 HMAC 식별자."""
+    return _student_digest(student_id)
+
+
+def issue_return_token(uid: str, student_id: str, corner_no: int, room_no: str, reservation_id: str = "") -> str:
     payload = {
         "uid": uid,
         "student": _student_digest(student_id),
         "corner": corner_no,
         "room": room_no,
+        "reservation": reservation_id,
         "exp": int(time.time()) + 4 * 60 * 60,
         "nonce": secrets.token_urlsafe(12),
     }

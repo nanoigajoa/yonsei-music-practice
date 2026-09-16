@@ -9,6 +9,8 @@ main.py - 연습실 현황 API 서버
     GET /status        전체 방 현황 (JSON 스냅샷)
     GET /stream        실시간 SSE 스트림
 """
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -37,6 +39,13 @@ AUTO_RETURN_ENABLED = os.getenv("AUTO_RETURN_ENABLED", "false").lower() == "true
 MAX_CONCURRENT_KIOSK_RESERVATIONS = max(1, int(os.getenv("MAX_CONCURRENT_KIOSK_RESERVATIONS", "3")))
 MAX_CONCURRENT_TAG_SYNC_CHECKS = max(1, int(os.getenv("MAX_CONCURRENT_TAG_SYNC_CHECKS", "3")))
 TAG_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("TAG_SYNC_INTERVAL_SECONDS", "5")))
+RECOVERY_INTERVAL_SECONDS = 15
+_recovery_attempts: dict[str, float] = {}
+_inflight_reservations: set[str] = set()
+_recovery_gate: asyncio.Semaphore | None = None
+_recovery_gate_loop: asyncio.AbstractEventLoop | None = None
+_background_tasks: set[asyncio.Task] = set()
+
 PRIVACY_NOTICE_VERSION = "2026-09-06"
 ALLOWED_TEST_ROOMS = {
     room.strip() for room in os.getenv("ALLOWED_TEST_ROOMS", "").split(",") if room.strip()
@@ -82,6 +91,13 @@ def _kiosk_tag_sync_gate() -> asyncio.Semaphore:
         _tag_sync_gate = asyncio.Semaphore(MAX_CONCURRENT_TAG_SYNC_CHECKS)
         _tag_sync_gate_loop = loop
     return _tag_sync_gate
+
+
+def _refresh_corner_after_response(corner_no: int) -> None:
+    """반납 성공 응답을 막지 않으면서 학교 원본 현황을 즉시 다시 읽는다."""
+    task = asyncio.create_task(collector.refresh_corner_now(corner_no))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @asynccontextmanager
@@ -135,6 +151,84 @@ async def _mark_tagged_active(record: reservations.Reservation) -> bool:
         return True
 
 
+async def _publish_reservation(record: reservations.Reservation) -> None:
+    if record.status == "active":
+        await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
+                                    end_at=record.end_at, reservation_id=record.id)
+        if AUTO_RETURN_ENABLED:
+            await auto_return.register(record.uid, record.student_id, record.corner_no, record.room_no,
+                                       due_at=record.end_at, booking_no=record.kiosk_booking_no, reservation_id=record.id)
+    elif record.status in {"pending_tag", "submitting", "uncertain"}:
+        await collector.mark_reserved(record.corner_no, record.room_no, start_at=record.start_at,
+                                      end_at=record.end_at, tag_deadline=record.tag_deadline,
+                                      status="pending_tag" if record.status == "pending_tag" else "uncertain",
+                                      reservation_id=record.id)
+
+
+def _kiosk_recovery_gate() -> asyncio.Semaphore:
+    global _recovery_gate, _recovery_gate_loop
+    loop = asyncio.get_running_loop()
+    if _recovery_gate is None or _recovery_gate_loop is not loop:
+        _recovery_gate, _recovery_gate_loop = asyncio.Semaphore(1), loop
+    return _recovery_gate
+
+
+async def reservation_recovery_loop() -> None:
+    while True:
+        try:
+            records = reservations.open_reservations()
+            ids = {record.id for record in records}
+            for old_id in list(_recovery_attempts):
+                if old_id not in ids:
+                    _recovery_attempts.pop(old_id, None)
+            await asyncio.gather(*(_recover_uncertain(record) for record in records if record.status == "uncertain"))
+        except Exception:
+            log.exception("예약 결과 복구 작업 오류")
+        await asyncio.sleep(RECOVERY_INTERVAL_SECONDS)
+
+
+async def _recover_uncertain(record: reservations.Reservation) -> reservations.Reservation:
+    """조회만 재시도한다. 일치하는 학교 증거가 없으면 선점을 그대로 유지한다."""
+    if record.status != "uncertain" or record.id in _inflight_reservations:
+        return record
+    async with _reservation_action_gate(record.id):
+        current = reservations.get(record.id) or record
+        if current.status != "uncertain":
+            return current
+        timestamp = asyncio.get_running_loop().time()
+        if timestamp - _recovery_attempts.get(current.id, float('-inf')) < RECOVERY_INTERVAL_SECONDS:
+            return current
+        _recovery_attempts[current.id] = timestamp
+        if current.dispatch_started != 1 or current.duration_min not in (30, 60, 90, 120):
+            # 구버전 기록에는 전송 계획이 없어 다른 예약을 잘못 연결할 수 있다.
+            return current
+        try:
+            async with _kiosk_recovery_gate():
+                evidence = await booking.recover_submission(current.student_id, current.corner_no, current.room_no,
+                                                            current.start_at, current.duration_min)
+            if not evidence:
+                return current
+            if (not evidence.get("booking_no") or evidence.get("room_no") != current.room_no
+                    or parse_kst(evidence["start_at"]) != current.start_at
+                    or evidence.get("duration_min") != current.duration_min
+                    or evidence.get("status") not in {"pending_tag", "active"}):
+                return current
+            confirmed = reservations.finalize(current.id, start_at=current.start_at, duration_min=current.duration_min,
+                                               kiosk_booking_no=evidence["booking_no"], status=evidence["status"])
+            await _publish_reservation(confirmed)
+            _recovery_attempts.pop(current.id, None)
+            return confirmed
+        except Exception:
+            log.exception("학교 예약 결과 재확인 실패 | reservation=%s", current.id)
+            return reservations.get(current.id) or current
+
+
+def _require_same_request(record: reservations.Reservation, data: BookingRequest) -> None:
+    if (record.corner_no != data.corner_no or record.room_no != data.room_no
+            or record.student_key != student_key(data.student_id) or record.duration_min != data.limit_time):
+        raise HTTPException(409, "같은 요청 번호의 방 또는 예약 시간을 변경할 수 없습니다.")
+
+
 async def sync_pending_tags_once() -> int:
     """사용자가 앱의 확인 버튼을 누르지 않아도 태그 상태를 동기화한다."""
     expired = reservations.expire_pending()
@@ -170,27 +264,22 @@ async def lifespan(app: FastAPI):
     interval = app.state.poll_interval
     task = asyncio.create_task(collector.polling_loop(interval))
     tag_task = asyncio.create_task(pending_tag_sync_loop())
-    # 재시작 후에도 이미 확정된 예약이 공실로 잠깐 보이지 않도록 복원한다.
+    recovery_task = asyncio.create_task(reservation_recovery_loop())
+    # 미확정 요청은 학교 POST를 재실행하지 않고 durable 계획으로 조회 복구한다.
     for record in reservations.open_reservations():
-        if record.status == "active":
-            await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
-                                        end_at=record.end_at, reservation_id=record.id)
-            if AUTO_RETURN_ENABLED:
-                await auto_return.register(record.uid, record.student_id, record.corner_no, record.room_no,
-                                           due_at=record.end_at, booking_no=record.kiosk_booking_no,
-                                           reservation_id=record.id)
-        else:
-            await collector.mark_reserved(record.corner_no, record.room_no, start_at=record.start_at,
-                                          end_at=record.end_at, tag_deadline=record.tag_deadline,
-                                          reservation_id=record.id)
+        if record.status == "submitting" or (record.status == "creating" and record.dispatch_started is None):
+            record = reservations.mark_uncertain(record.id) or record
+        await _publish_reservation(record)
     return_task = asyncio.create_task(auto_return.scheduler_loop()) if AUTO_RETURN_ENABLED else None
     log.info("백그라운드 폴링 시작 (%d초 간격)", interval)
-    yield
-    task.cancel()
-    tag_task.cancel()
-    if return_task:
-        return_task.cancel()
-    log.info("서버 종료")
+    try:
+        yield
+    finally:
+        tasks = [task, tag_task, recovery_task] + ([return_task] if return_task else [])
+        for running in tasks:
+            running.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        log.info("서버 종료")
 
 
 app = FastAPI(
@@ -200,6 +289,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.poll_interval = max(10, int(os.getenv("POLL_INTERVAL_SECONDS", "20")))
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -213,7 +303,7 @@ class BookingRequest(BaseModel):
     student_id: str = Field(pattern=r"^20\d{8}$")
     corner_no: int
     room_no: str = Field(pattern=r"^\d{3}$")
-    limit_time: int = 120
+    limit_time: int = Field(default=120, ge=30, le=120, multiple_of=30)
     # 네트워크 재시도·브라우저 응답 유실에서도 키오스크 예약을 한 번만 보내기 위한 키.
     request_id: str | None = Field(default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
@@ -246,14 +336,17 @@ class CurrentBookingRequest(BaseModel):
 
 def _result_for_existing_request(record: reservations.Reservation, user: dict, student_id: str) -> dict:
     """이미 처리 중이거나 완료된 동일 요청의 현재 결과를 안전하게 복원한다."""
-    if record.status == "creating":
+    if record.status in reservations.UNCONFIRMED_STATUSES:
         return {
             "success": False, "pending": True, "request_id": record.request_id,
-            "message": "예약 요청을 처리 중입니다. 잠시만 기다려 주세요.",
+            "code": "confirmation_pending" if record.status == "uncertain" else "processing",
+            "room_no": record.room_no, "corner_no": record.corner_no,
+            "message": f"예약을 확정하지 못했습니다. {record.end_at:%H:%M} 이후 다시 예약할 수 있습니다." if record.status == "uncertain" else "예약 요청을 처리하고 있습니다.",
         }
     if record.status in {"pending_tag", "active"}:
         return {
             "success": True, "pending": False, "request_id": record.request_id,
+            "room_no": record.room_no, "corner_no": record.corner_no,
             "message": f"{record.room_no}호 예약을 확인했습니다.",
             "return_token": issue_return_token(
                 user["uid"], student_id, record.corner_no, record.room_no, record.id,
@@ -324,6 +417,7 @@ async def health():
         "data_ready": state is not None,
         "updated_at": state.updated_at if state else None,
         "booking_enabled": BOOKING_ENABLED,
+        "school_access_allowed": True,
         "auto_return_enabled": AUTO_RETURN_ENABLED,
     }
 
@@ -401,57 +495,64 @@ async def reserve_room(data: BookingRequest, user: dict = Depends(current_user))
     if data.request_id:
         existing = reservations.find_by_request(user["uid"], data.request_id)
         if existing:
+            _require_same_request(existing, data)
             return _result_for_existing_request(existing, user, data.student_id)
-    # 방/학생 선점은 gate 안에서 수행한다. 그러면 대기열에 있는 요청이 장시간
-    # creating 상태로 남지 않으며, gate를 통과한 첫 요청만 외부 키오스크로 간다.
+    # DB에 요청을 선점한 뒤에만 학교로 전송한다. 동시 재시도는 같은 행을 읽는다.
     async with _kiosk_reservation_gate():
-        # 같은 요청이 게이트 대기 중 재전송됐을 수 있으므로 다시 확인한다.
         if data.request_id:
             existing = reservations.find_by_request(user["uid"], data.request_id)
             if existing:
+                _require_same_request(existing, data)
                 return _result_for_existing_request(existing, user, data.student_id)
         try:
             intent = reservations.acquire(
                 id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
                 student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no,
-                request_id=data.request_id,
+                request_id=data.request_id, duration_min=data.limit_time,
             )
         except reservations.ReservationConflict as exc:
             raise HTTPException(409, str(exc)) from exc
 
-        try:
-            result = await booking.reserve(data.student_id, data.corner_no, data.room_no, data.limit_time)
-            log.info("예약 결과 | corner=%d room=%s success=%s message=%s",
-                     data.corner_no, data.room_no, result.get("success"), result.get("message", ""))
-            if result.get("success"):
-                if not result.get("start_at"):
-                    log.error("키오스크 예약 성공 응답에 예약 시작 시각이 없습니다.")
-                    raise HTTPException(502, "키오스크가 예약 시작 시각을 반환하지 않았습니다. 예약현황을 확인해 주세요.")
-                start_at = parse_kst(result["start_at"])
-                record = reservations.finalize(intent.id, start_at=start_at, duration_min=data.limit_time,
-                                               kiosk_booking_no=result.get("booking_no"))
-                result["return_token"] = issue_return_token(
-                    user["uid"], data.student_id, data.corner_no, data.room_no, record.id
+        async with _reservation_action_gate(intent.id):
+            _inflight_reservations.add(intent.id)
+            try:
+                result = await booking.reserve(
+                    data.student_id, data.corner_no, data.room_no, data.limit_time,
+                    before_submit=lambda start: reservations.begin_submission(intent.id, start_at=start),
                 )
-                result["reservation"] = _reservation_payload(record)
-                # 다음 정기 폴링 전에도 다른 사용자 화면에 선점 상태를 알린다.
-                await collector.mark_reserved(data.corner_no, data.room_no, start_at=record.start_at,
-                                              end_at=record.end_at, tag_deadline=record.tag_deadline,
-                                              reservation_id=record.id)
-            else:
+                if result.get("success"):
+                    if not result.get("start_at") or not result.get("booking_no"):
+                        raise booking.ReservationOutcomeUnknown("학교 예약 증거가 불완전합니다.")
+                    record = reservations.finalize(intent.id, start_at=parse_kst(result["start_at"]),
+                                                   duration_min=data.limit_time, kiosk_booking_no=result["booking_no"],
+                                                   status=result.get("status", "pending_tag"))
+                    return _result_for_existing_request(record, user, data.student_id)
+                if result.get("success") is False and not result.get("pending"):
+                    reservations.reject_submission(intent.id)
+                    return {**result, "request_id": data.request_id, "pending": False}
+                raise booking.ReservationOutcomeUnknown("학교 예약 결과가 불명확합니다.")
+            except BaseException as exc:
+                # 취소·timeout·파싱·DB 확정 오류 모두 전송 이후라면 실패로 추정하지 않는다.
+                current = reservations.get(intent.id)
+                if current and (current.dispatch_started != 0 or isinstance(exc, booking.ReservationOutcomeUnknown)):
+                    current = reservations.mark_uncertain(intent.id) or current
+                    if isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                        raise
+                    log.warning("예약 결과 확인 필요 | reservation=%s error_type=%s", intent.id, type(exc).__name__)
+                    return _result_for_existing_request(current, user, data.student_id)
                 reservations.fail(intent.id)
-            return result
-        except HTTPException:
-            reservations.fail(intent.id)
-            raise
-        except httpx.HTTPError as exc:
-            reservations.fail(intent.id)
-            log.warning("예약 연동 실패: %s", exc)
-            raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
-        except ValueError as exc:
-            reservations.fail(intent.id)
-            # 동시 요청 사이에 같은 사용자의 예약이 만들어진 경우다.
-            raise HTTPException(409, str(exc)) from exc
+                if isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                    raise
+                raise HTTPException(502, "학교 예약 준비에 실패했습니다. 예약은 전송하지 않았습니다.") from exc
+            finally:
+                _inflight_reservations.discard(intent.id)
+                current = reservations.get(intent.id)
+                if current:
+                    try:
+                        await _publish_reservation(current)
+                    except Exception:
+                        # 확정된 DB 결과를 UI 갱신 실패로 되돌리지 않는다.
+                        log.exception("예약 현황 반영 실패 | reservation=%s", intent.id)
 
 
 @app.post("/booking/current")
@@ -461,14 +562,15 @@ async def current_booking(data: CurrentBookingRequest, user: dict = Depends(curr
     record = reservations.open_for_uid(user["uid"])
     if record is None:
         return {"success": True, "found": False, "message": "진행 중인 예약이 없습니다."}
-    if record.status == "creating":
+    if record.status in reservations.UNCONFIRMED_STATUSES:
         return {
             "success": True, "found": True, "pending": True,
+            "request_id": record.request_id, "code": "confirmation_pending", "duration_min": record.duration_min,
             "room_no": record.room_no, "corner_no": record.corner_no,
-            "message": "예약 요청을 처리 중입니다.",
+            "message": f"예약을 확정하지 못했습니다. {record.end_at:%H:%M} 이후 다시 예약할 수 있습니다." if record.status == "uncertain" else "예약 요청을 처리하고 있습니다.",
         }
     return {
-        "success": True, "found": True, "pending": False,
+        "success": True, "found": True, "pending": False, "request_id": record.request_id,
         "room_no": record.room_no, "corner_no": record.corner_no,
         "return_token": issue_return_token(
             user["uid"], data.student_id, record.corner_no, record.room_no, record.id,
@@ -485,9 +587,10 @@ async def reservation_result(data: BookingResultRequest, user: dict = Depends(cu
     record = reservations.find_by_request(user["uid"], data.request_id)
     if record is None:
         return {
-            "success": False, "pending": True, "request_id": data.request_id,
+            "success": False, "pending": True, "request_id": data.request_id, "code": "not_recorded",
             "message": "예약 요청이 서버 대기열에 있습니다. 잠시 후 다시 확인해 주세요.",
         }
+    record = await _recover_uncertain(record)
     return _result_for_existing_request(record, user, data.student_id)
 
 
@@ -551,55 +654,56 @@ async def import_active_booking(data: KioskImportRequest, user: dict = Depends(c
     # 확인한 본인 사용 기록은 새 예약으로 만들지 않는다. 새 반납 권한만 다시
     # 발급해 '이미 예약 또는 사용 중' 충돌 없이 현재 사용 화면을 복원한다.
     existing = reservations.open_for_uid(user["uid"])
-    if existing:
-        if existing.status == "active" and existing.corner_no == data.corner_no and existing.room_no == data.room_no:
-            result = {
-                "success": True,
-                "active": True,
-                "booking_no": existing.kiosk_booking_no,
-                "room_no": existing.room_no,
-                "start_at": existing.start_at.isoformat(),
-                "end_at": existing.end_at.isoformat(),
-                "message": f"진행 중인 {existing.room_no}호 사용을 불러왔습니다.",
-            }
-            result["return_token"] = issue_return_token(
-                user["uid"], data.student_id, data.corner_no, data.room_no, existing.id
-            )
-            result["reservation"] = _reservation_payload(existing)
-            return result
-        raise HTTPException(409, "이미 예약 또는 사용 중인 연습실이 있습니다. 기존 예약을 취소하거나 반납해 주세요.")
-    try:
-        intent = reservations.acquire(
-            id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
-            student_key=student_key(data.student_id), corner_no=data.corner_no, room_no=data.room_no,
+    if existing and existing.status == "active" and existing.corner_no == data.corner_no and existing.room_no == data.room_no:
+        result = {
+            "success": True,
+            "active": True,
+            "booking_no": existing.kiosk_booking_no,
+            "room_no": existing.room_no,
+            "start_at": existing.start_at.isoformat(),
+            "end_at": existing.end_at.isoformat(),
+            "message": f"진행 중인 {existing.room_no}호 사용을 불러왔습니다.",
+        }
+        result["return_token"] = issue_return_token(
+            user["uid"], data.student_id, data.corner_no, data.room_no, existing.id
         )
-    except reservations.ReservationConflict as exc:
-        raise HTTPException(409, str(exc)) from exc
+        result["reservation"] = _reservation_payload(existing)
+        return result
     try:
         result = await booking.active_details(data.student_id, data.corner_no)
         if not result.get("success"):
-            reservations.fail(intent.id)
             return result
         if result.get("room_no") != data.room_no:
-            reservations.fail(intent.id)
             return {"success": False, "message": "선택한 방과 키오스크에서 사용 중인 방이 다릅니다."}
         start_at = parse_kst(result["start_at"])
         end_at = parse_kst(result["end_at"])
-        duration = max(1, int((end_at - start_at).total_seconds() // 60))
-        record = reservations.finalize(intent.id, start_at=start_at, duration_min=duration,
-                                       kiosk_booking_no=result["booking_no"])
-        record = reservations.set_status(record.id, "active") or record
+        record, reconciled = reservations.import_active(
+            id=secrets.token_urlsafe(18), uid=user["uid"], student_id=data.student_id,
+            student_key=student_key(data.student_id), corner_no=data.corner_no,
+            room_no=data.room_no, start_at=start_at, end_at=end_at,
+            kiosk_booking_no=result["booking_no"],
+        )
         result["return_token"] = issue_return_token(user["uid"], data.student_id, data.corner_no, data.room_no, record.id)
         result["reservation"] = _reservation_payload(record)
+        if reconciled:
+            await collector.clear_reserved(
+                reconciled.corner_no, reconciled.room_no, reservation_id=reconciled.id,
+            )
         await collector.mark_active(record.corner_no, record.room_no, start_at=record.start_at,
                                     end_at=record.end_at, reservation_id=record.id)
+        if AUTO_RETURN_ENABLED:
+            await auto_return.register(
+                record.uid, record.student_id, record.corner_no, record.room_no,
+                due_at=record.end_at, booking_no=record.kiosk_booking_no,
+                reservation_id=record.id,
+            )
         return result
+    except reservations.ReservationConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
     except httpx.HTTPError as exc:
-        reservations.fail(intent.id)
         log.warning("키오스크 사용 예약 불러오기 실패: %s", exc)
         raise HTTPException(502, "키오스크 서버에 연결할 수 없습니다.")
     except (KeyError, ValueError) as exc:
-        reservations.fail(intent.id)
         raise HTTPException(502, "키오스크 사용 예약 정보를 해석하지 못했습니다.") from exc
 
 
@@ -623,9 +727,9 @@ async def _return_booking_locked(data: BookingActionRequest, user: dict, claims:
             reservations.set_status(record.id, "returned")
             await collector.clear_reserved(data.corner_no, str(claims.get("room", "")),
                                            reservation_id=record.id)
-            # 응답 전에 해당 코너만 원본에서 다시 읽어, 반납 후
-            # 예전 '사용중' 카드가 남은 채로 사용자 화면에 돌아가지 않게 한다.
-            await collector.refresh_corner_now(data.corner_no)
+            # 학교 반납 성공은 즉시 응답하고, 상대적으로 느린 층 현황 재조회는
+            # 백그라운드에서 이어간다. 실제 반납/DB 기록은 이미 끝난 상태다.
+            _refresh_corner_after_response(data.corner_no)
         return result
     except httpx.HTTPError as exc:
         log.warning("반납 연동 실패: %s", exc)
@@ -642,14 +746,19 @@ async def cancel_booking(data: BookingActionRequest, user: dict = Depends(curren
 
 async def _cancel_booking_locked(data: BookingActionRequest, user: dict, claims: dict):
     record = reservations.open_for_uid(user["uid"])
-    # 태그 마감 직후에는 expire_pending()이 이미 DB 상태를 expired로 바꾼다.
-    # 이 경우도 사용자 입장에서는 '취소 완료'이므로 로컬 화면을 정상적으로 닫는다.
-    if not record:
-        expired = reservations.get(str(claims.get("reservation", "")))
-        if expired and expired.uid == user["uid"] and expired.status == "expired":
-            await collector.clear_reserved(expired.corner_no, expired.room_no, reservation_id=expired.id)
-            await collector.refresh_corner_now(expired.corner_no)
-            return {"success": True, "message": "태그 시간이 지나 예약이 자동 취소되었습니다."}
+    # 응답을 놓친 취소 재시도는 이미 완료된 원래 예약의 결과를 반환한다.
+    previous = reservations.get(str(claims.get("reservation", "")))
+    terminal_messages = {
+        "cancelled": "예약 취소 완료",
+        "expired": "태그 시간이 지나 예약이 자동 취소되었습니다.",
+        "ended": "이미 이용 시간이 종료된 예약입니다.",
+        "returned": "이미 반납한 예약입니다.",
+    }
+    if previous and previous.uid == user["uid"] and previous.status in terminal_messages:
+        await collector.clear_reserved(previous.corner_no, previous.room_no, reservation_id=previous.id)
+        if previous.status == "expired":
+            await collector.refresh_corner_now(previous.corner_no)
+        return {"success": True, "message": terminal_messages[previous.status]}
     if not record or record.id != claims.get("reservation") or record.status != "pending_tag":
         raise HTTPException(409, "취소할 인증대기 예약을 찾지 못했습니다.")
     try:
@@ -684,7 +793,7 @@ async def push(
     if x_push_secret != PUSH_SECRET:
         raise HTTPException(401, "Invalid push secret")
     async with collector._lock:
-        collector._state = data
+        collector._state = collector._status_with_rooms(collector._apply_pending_overlays(data.rooms))
     await collector._notify()
     log.info("push 수신 | 전체 %d개 | 사용중 %d | 예약가능 %d",
              data.total, data.occupied_count, data.available_count)
@@ -697,6 +806,7 @@ def _sse(data: dict) -> str:
 
 def _reservation_payload(record: reservations.Reservation) -> dict:
     return {
+        "id": record.id,
         "status": record.status,
         "start_at": record.start_at.isoformat(),
         "end_at": record.end_at.isoformat(),
